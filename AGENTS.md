@@ -14,3 +14,4 @@ Monorepo for a Discord-driven, agent-built multiplayer game. Architecture:
   `bot/`, `api/`, `game/core/` or `game/project.godot` unless the task explicitly asks
   for it. Those paths need human review.
 - Commits follow Conventional Commits (`docs/conventional-commits.md`).
+- Pull requests follow (`docs/pull-requests.md`).
