@@ -21,6 +21,9 @@ const REMOTE_SMOOTHING := 20.0
 @export var net_yaw := 0.0
 @export var net_pitch := 0.0
 
+## Account display name, set by the server when spawning. Shown above remote players.
+var display_name := ""
+
 ## View angles in radians. Yaw rotates around +Y; pitch is clamped to +-89 degrees.
 var yaw := 0.0
 var pitch := 0.0
@@ -49,6 +52,7 @@ func _ready() -> void:
 		_camera.queue_free()
 		set_physics_process(false)
 		global_position = net_position
+		_add_nameplate()
 
 
 func is_local() -> bool:
@@ -124,6 +128,22 @@ func _update_camera() -> void:
 	var bottom := origin.y - movement.hull_height_m() * 0.5
 	_camera.global_position = Vector3(origin.x, bottom + movement.eye_height_m(), origin.z)
 	_camera.global_rotation = Vector3(pitch, yaw, 0.0)
+
+
+func _add_nameplate() -> void:
+	if display_name.is_empty():
+		return
+	var label := Label3D.new()
+	label.name = "Nameplate"
+	label.text = display_name
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.fixed_size = true
+	label.pixel_size = 0.0015
+	label.font_size = 24
+	label.outline_size = 6
+	label.no_depth_test = true
+	label.position.y = movement.hull_height_m() * 0.5 + 0.35
+	add_child(label)
 
 
 func _configure_hull() -> void:

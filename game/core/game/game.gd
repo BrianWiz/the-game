@@ -3,6 +3,8 @@ extends Node3D
 ## Root gameplay scene. Server-authoritative orchestration:
 ## the server spawns/despawns one Player per peer via MultiplayerSpawner and
 ## enforces world rules (e.g. respawning players who fall out of the world).
+## Peers only count as connected once their join ticket checks out (see Network), so
+## `peer_connected` means "authenticated" and carries the account's display name.
 
 const PLAYER_SCENE := preload("res://core/player/player.tscn")
 const KILL_Y := -50.0
@@ -48,8 +50,9 @@ func _on_mode_changed(mode: Network.Mode) -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
-	print("Peer %d connected, spawning player" % peer_id)
-	_spawner.spawn({"peer": peer_id, "position": _spawn_position()})
+	var display_name := Network.peer_name(peer_id)
+	print("Peer %d (%s) connected, spawning player" % [peer_id, display_name])
+	_spawner.spawn({"peer": peer_id, "position": _spawn_position(), "name": display_name})
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -69,6 +72,7 @@ func _spawn_player(data: Variant) -> Node:
 	player.name = str(peer_id)
 	player.position = info["position"]
 	player.net_position = info["position"]
+	player.display_name = str(info.get("name", ""))
 	player.set_multiplayer_authority(peer_id)
 	return player
 

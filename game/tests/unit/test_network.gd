@@ -35,3 +35,13 @@ func test_offline_keyword_means_offline() -> void:
 func test_project_default_server_is_configured() -> void:
 	var url := str(ProjectSettings.get_setting(Network.DEFAULT_SERVER_SETTING, ""))
 	assert_true(url.begins_with("wss://"), "web builds need a TLS WebSocket default")
+
+
+func test_project_default_api_is_https() -> void:
+	Network.args = {}
+	assert_eq(Network.resolve_api_url(), "https://game.chrisbox.dev/api")
+
+
+func test_api_arg_overrides_default() -> void:
+	Network.args = {"api": "http://127.0.0.1:8080/api/"}
+	assert_eq(Network.resolve_api_url(), "http://127.0.0.1:8080/api")

@@ -15,4 +15,5 @@ EXPOSE 7777
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/7777"]
 ENTRYPOINT ["./the-game-server.x86_64", "--headless", "--"]
-CMD ["--server", "--port=7777"]
+# The ticket key is shared with the accounts API; the server refuses to start without it.
+CMD ["--server", "--port=7777", "--ticket-key-file=/run/secrets/ticket/ticket-key"]

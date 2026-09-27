@@ -42,6 +42,7 @@ enabled=PackedStringArray("res://addons/gut/plugin.cfg")
 [game]
 
 network/default_server_url="wss://game.chrisbox.dev"
+network/api_url="https://game.chrisbox.dev/api"
 
 [physics]
 
