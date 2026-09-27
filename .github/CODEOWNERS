@@ -1,0 +1,9 @@
+# Agent-built PRs that touch these paths always need a human (not a Discord approval).
+# The bot's merge coordinator enforces this; CODEOWNERS makes it visible on the PR.
+/.github/                     @christophersarmiento
+/harness/                     @christophersarmiento
+/bot/                         @christophersarmiento
+/api/                         @christophersarmiento
+/game/core/movement/          @christophersarmiento
+/game/core/net/               @christophersarmiento
+/game/project.godot           @christophersarmiento
