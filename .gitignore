@@ -1,0 +1,17 @@
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Build output
+/build/
+
+# Godot
+game/.godot/
+game/*.translation
+game/export_credentials.cfg
+
+# Local tooling
+.playwright-mcp/
+.env
+*.local
