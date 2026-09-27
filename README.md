@@ -9,7 +9,7 @@ b-hops), built by friends and LLM agents through Discord. See
 | `game/` | Godot 4.7 client and dedicated server: room, Source movement, networking |
 | `harness/` | `verify.sh` (agent definition of done); runner is planned |
 | `bot/` | Go Discord bot (planned) |
-| `api/` | Go accounts service (planned) |
+| `api/` | Go accounts service: email/Discord sign-in, display names, join tickets |
 
 ## Quick start
 
@@ -25,13 +25,24 @@ harness/verify.sh                            # lint + tests + multiplayer smoke
 Local multiplayer:
 
 ```bash
-godot --path game --headless -- --server --port=7777
-godot --path game -- --connect=ws://127.0.0.1:7777   # run 2+ times
+godot --path game --headless -- --server --port=7777 --dev-insecure-auth
+godot --path game -- --connect=ws://127.0.0.1:7777 --dev-insecure-auth --name=Alice
+```
+
+`--dev-insecure-auth` skips accounts. To use real ones, run the API locally:
+
+```bash
+openssl rand -hex 32 > /tmp/ticket-key
+(cd api && API_ADDR=127.0.0.1:8080 API_DB=/tmp/api.db API_TICKET_KEY_FILE=/tmp/ticket-key \
+  API_DEV_LOG_MAIL=true API_ALLOWED_ORIGINS=http://localhost:8060 \
+  API_CLIENT_URL=http://localhost:8060/ go run ./cmd/api)
+godot --path game --headless -- --server --port=7777 --ticket-key-file=/tmp/ticket-key
 ```
 
 Web: `game/scripts/export.sh web` exports to `build/web/`. Serve it with
-`python3 -m http.server -d build/web`, and add `?server=ws://127.0.0.1:7777` to the URL
-to join a server.
+`python3 -m http.server -d build/web 8060`, and add
+`?server=ws://127.0.0.1:7777&api=http://127.0.0.1:8080/api` to the URL to join a local
+server. Sign-up emails show up in the API's log.
 
 ## Controls
 

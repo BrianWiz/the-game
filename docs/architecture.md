@@ -14,7 +14,7 @@ Discord ◀──▶ bot (Go, homelab)  ──GitHub App──▶  issues / PRs 
             api (Go, homelab)                        server-image.yml → ghcr.io → homelab
             accounts, sessions, join tickets
                  ▲
-Browser ─────────┘  wss://game.chrisbox.dev (NPM) ──▶ game server (Godot headless, homelab)
+Browser ─────────┘  wss://game.chrisbox.dev (Cloudflare Tunnel) ──▶ game server (Godot headless, homelab)
 ```
 
 ## Repo layout
@@ -72,20 +72,91 @@ respawn via RPC. That tradeoff is deliberate for a friends-only sandbox.
 - Offline: the default. The process is its own server, so single player works without
   a backend.
 
-## Accounts (`api/`, planned)
+## Accounts (`api/`)
 
-- **Sign-in:** either Discord OAuth2 or email and password (argon2id hashes, email
-  verification, reset tokens). Both resolve to one `accounts` row, and a Discord identity
-  can be linked to an email account.
-- **Session:** the API returns a session token to the web client.
-- **Joining a game:**
-  1. The client calls `POST /join-ticket` and gets a short-lived ticket
-     (HMAC/Ed25519-signed: account ID, display name, expiry).
-  2. The client sends the ticket in its first RPC after connecting.
-  3. The server verifies the ticket, then spawns the player. Unauthenticated peers are
-     kicked after a timeout.
-- **Storage:** SQLite on the homelab, shared with the bot so Discord users map to game
-  accounts.
+A Go service (`net/http`, pure-Go SQLite via `modernc.org/sqlite`, no CGO) on the same
+VM as the game server. Every route is under `/api/`, so one hostname serves both: the
+tunnel sends `game.chrisbox.dev/api/*` to the API and everything else to the game server.
+
+- **Accounts:** one row per player, reached by email and password (argon2id, 19 MiB /
+  t=2 / p=1), by Discord OAuth2 (scope `identify`), or both once linked. Every player
+  picks a unique display name (3-16 of `[A-Za-z0-9_]`, unique ignoring case); Discord
+  sign-ups pick one too instead of inheriting their Discord name. Anyone with an account
+  may play.
+- **Email** (Resend): sign-up stores a *pending* sign-up and mails a link. The account is
+  created only when the link is followed, with the password from that sign-up, so nobody
+  can pre-set a password for someone else's address. Sign-up and reset answer the same
+  way whether or not an address has an account; sends happen in the background so timing
+  doesn't leak it either.
+- **Sessions:** a random bearer token returned in JSON, stored by the web client in
+  `localStorage` (and in `user://` natively). The client lives on another site
+  (`tfpp.github.io`), so there are no cookies; CORS allows exactly the configured origins,
+  without credentials. Sessions last 30 days; a password reset revokes all of them.
+- **Links back to the client** use URL fragments (`#verify=`, `#reset=`, `#forgot`,
+  `#discord_code=`, `#auth_error=`), which browsers never send to servers. Session tokens
+  never appear in URLs.
+- **Discord:** `POST /api/auth/discord/start` takes `code_challenge = hex(sha256(verifier))`
+  and returns Discord's authorize URL. Discord redirects to
+  `/api/auth/discord/callback`, which sends the browser back to the client with a
+  2-minute, one-time `#discord_code=`. The client redeems it with the verifier it kept, so
+  only the browser that started the flow can. With a session and `link: true`, the same
+  flow links Discord to the signed-in account.
+- **Secrets** are files (`*_FILE` settings), never environment variables. Email or
+  Discord switch themselves off (and `/api/health` says so) until their secrets exist.
+- **Rate limits** (in memory, per IP from `CF-Connecting-IP` and per email or account)
+  cover sign-up, login, reset, token redemption, name changes and tickets.
+- **Storage:** SQLite (WAL) in `/data/api.db`, shared with the bot later so Discord users
+  map to game accounts. Secrets in the database (sessions, email tokens, OAuth state,
+  login codes) are stored as SHA-256 hashes. Migrations are append-only and tracked
+  with `PRAGMA user_version`.
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/health` | | Liveness, plus whether email and Discord are enabled |
+| `POST /api/auth/signup` | | `{email, password, display_name}` → 202, mails a link |
+| `POST /api/auth/verify-email` | | `{token}` → session |
+| `POST /api/auth/login` | | `{email, password}` → session |
+| `POST /api/auth/logout` | bearer | Revokes the session |
+| `POST /api/auth/password-reset/request` | | `{email}` → 202, mails a link |
+| `POST /api/auth/password-reset/confirm` | | `{token, password}` → session |
+| `POST /api/auth/discord/start` | optional | `{code_challenge, link}` → `{url}` |
+| `GET /api/auth/discord/callback` | | Discord redirect target |
+| `POST /api/auth/discord/exchange` | | `{code, code_verifier}` → session |
+| `GET /api/me` | bearer | The account |
+| `PUT /api/me/display-name` | bearer | `{display_name}`; 409 `name_taken` |
+| `POST /api/join-ticket` | bearer | `{ticket, expires_at}`; 409 without a display name |
+
+**Configuration** (environment): `API_ADDR` (`:8080`), `API_DB`, `API_PUBLIC_URL`
+(`https://game.chrisbox.dev`, used for the Discord redirect URI), `API_CLIENT_URL`
+(`https://tfpp.github.io/the-game/`), `API_ALLOWED_ORIGINS` (comma-separated),
+`API_TRUST_CF_CONNECTING_IP`, `API_TICKET_KEY_FILE`, `DISCORD_CLIENT_ID`,
+`DISCORD_CLIENT_SECRET_FILE`, `RESEND_API_KEY_FILE`, `MAIL_FROM`. For local development,
+`API_DEV_LOG_MAIL=true` logs emails (with their links) instead of sending them.
+
+### Joining a game
+
+1. The client calls `POST /api/join-ticket` and gets a 60-second ticket:
+   `"v1." + base64(json) + "." + base64(HMAC-SHA256(key, "v1." + base64(json)))`, where
+   the JSON is `{"aid", "name", "exp", "nonce"}`. HMAC rather than Ed25519 because Godot's
+   `Crypto` can't verify Ed25519; the API and game server share a key file on one host.
+2. The client connects and presents the ticket through SceneMultiplayer's auth handshake
+   (`send_auth`), before it counts as connected.
+3. The server (`core/net/network.gd`, `core/net/join_ticket.gd`) checks the signature,
+   expiry and lifetime, and rejects reused nonces. On success it completes the handshake,
+   so `peer_connected` means "authenticated", and the player spawns with the account's
+   display name. Otherwise it sends the reason and drops the peer; silent peers time out
+   after 5 seconds. A second connection for the same account replaces the first.
+
+Unauthenticated peers get no RPCs, spawns or replication. A shared test vector in
+`api/internal/ticket/ticket_test.go` and `game/tests/unit/test_join_ticket.gd` keeps the
+Go signer and the GDScript verifier in step.
+
+**Server flags:** `--ticket-key-file=PATH` (the server refuses to start without a key), or
+`--dev-insecure-auth` for local tests, which also accepts unsigned `dev:<name>` tickets.
+**Client flags:** `--ticket=...`, or `--dev-insecure-auth [--name=Bob]`. Otherwise a
+client with a server configured (the web default) shows the login screen
+(`ui/login/`) over the offline room. `--api=` / `?api=` override the API URL
+(`game/network/api_url`).
 
 ## Agent pipeline (planned)
 
@@ -127,7 +198,8 @@ Approvals come from Discord, and a single coordinator applies them in order.
 |---|---|---|
 | Web client | `pages.yml` (Godot web export) | GitHub Pages |
 | Dedicated server | `server-image.yml` → `ghcr.io/tfpp/the-game-server` | Homelab VM (docker compose, deployed from `~/code/homelab`) |
-| bot, api | Their own images (planned) | Homelab VM |
+| API | `api-image.yml` → `ghcr.io/tfpp/the-game-api` | Homelab VM, same compose project |
+| bot | Its own image (planned) | Homelab VM |
 
 The client and server must run the same code. The plan is a protocol/version check on
 join, plus a server deploy triggered by the same merge that updates Pages.
