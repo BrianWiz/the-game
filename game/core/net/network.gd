@@ -11,7 +11,11 @@ extends Node
 ## Modes (picked in `start_from_environment`):
 ##   dedicated server: `godot --headless -- --server [--port=7777]`
 ##   client:           `-- --connect=ws://host:7777`, or `?server=wss://...` on web
-##   offline:          default; OfflineMultiplayerPeer, this process is the server
+##   offline:          `-- --offline`, `?server=offline`, or no server configured;
+##                     OfflineMultiplayerPeer, this process is the server
+##
+## Web builds with no `?server=` join `game/network/default_server_url`.
+## Native builds default to offline so local development needs no backend.
 
 signal mode_changed(mode: Mode)
 signal connection_failed(reason: String)
@@ -19,6 +23,7 @@ signal connection_failed(reason: String)
 enum Mode { OFFLINE, SERVER, CLIENT }
 
 const DEFAULT_PORT := 7777
+const DEFAULT_SERVER_SETTING := "game/network/default_server_url"
 
 var mode := Mode.OFFLINE
 ## User args after `--`, e.g. {"server": "", "port": "7777"}.
@@ -39,11 +44,24 @@ func start_from_environment() -> void:
 	if args.has("server"):
 		start_server(int(args.get("port", str(DEFAULT_PORT))))
 		return
-	var url: String = args.get("connect", _web_query_param("server"))
-	if not url.is_empty():
+	var url := resolve_server_url()
+	if url.is_empty():
+		start_offline()
+	else:
 		join(url)
-		return
-	start_offline()
+
+
+## Server URL to join, or "" for offline. Precedence: --offline, --connect=,
+## ?server= (web), then the project default (web only).
+func resolve_server_url() -> String:
+	if args.has("offline"):
+		return ""
+	var url: String = args.get("connect", "")
+	if url.is_empty() and OS.has_feature("web"):
+		url = _web_query_param("server")
+		if url.is_empty():
+			url = str(ProjectSettings.get_setting(DEFAULT_SERVER_SETTING, ""))
+	return "" if url == "offline" else url
 
 
 func start_server(port: int) -> Error:
