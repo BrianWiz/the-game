@@ -1,0 +1,44 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["game/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.7.2
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Link export templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates
+          ln -sfn /root/.local/share/godot/export_templates/4.7.2.stable \
+            ~/.local/share/godot/export_templates/4.7.2.stable || true
+      - name: Export web
+        run: GODOT=godot game/scripts/export.sh web
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
