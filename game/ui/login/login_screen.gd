@@ -1,7 +1,8 @@
 extends CanvasLayer
 ## Sign-in screen shown before joining an online server (`Network.login_required`), and
-## the in-game menu: releasing the mouse (Esc) opens it, with Resume, display name,
-## leave/play offline and sign out.
+## the in-game menu. The game view is either playing (mouse captured) or showing this
+## screen: whenever the mouse is free with nothing on screen (Esc, a lost pointer lock,
+## a refused lock), the menu opens. Buttons that return to the game capture the mouse.
 ##
 ## Email/password or Discord sign-in, display-name picker, then "Play" fetches a join
 ## ticket and connects. The offline room keeps running behind it, and "Play offline"
@@ -14,6 +15,7 @@ const PANEL_WIDTH := 400.0
 const UI_THEME := preload("res://ui/theme/ui_theme.tres")
 const MESSAGE_COLOR := Color(0.3, 0.4, 0.55)
 const ERROR_COLOR := Color(0.8, 0.2, 0.2)
+const IDLE_MENU_DELAY_S := 0.25
 
 const AUTH_ERRORS := {
 	"discord_cancelled": "Discord sign-in was cancelled.",
@@ -27,9 +29,10 @@ var _api: AccountApi
 var _account := {}
 var _server_url := ""
 var _box: VBoxContainer
-## The in-game menu is showing (Esc closes it).
+## The in-game menu is showing (Esc closes it on native builds).
 var _menu_open := false
-var _was_captured := false
+## How long the mouse has been free with no screen up.
+var _idle_s := 0.0
 
 
 func _ready() -> void:
@@ -42,16 +45,25 @@ func _ready() -> void:
 		_on_login_required(Network.pending_url)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if visible or DisplayServer.get_name() == "headless":
+		_idle_s = 0.0
+		return
 	# Browsers exit pointer lock on Esc without passing the key on, so watch the mouse
-	# mode instead of the key: any release while playing opens the menu.
-	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	if _was_captured and not captured and not visible:
+	# mode rather than the key. The grace period covers a lock request still in flight.
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		_idle_s = 0.0
+		return
+	_idle_s += delta
+	if _idle_s >= IDLE_MENU_DELAY_S:
 		open_menu()
-	_was_captured = captured
 
 
 func _input(event: InputEvent) -> void:
+	# Browsers only lock the pointer from a click, never from Esc, so on the web Esc
+	# leaves the menu up and Resume is the way back.
+	if OS.has_feature("web"):
+		return
 	if _menu_open and visible and event.is_action_pressed("release_mouse"):
 		get_viewport().set_input_as_handled()
 		_resume()
@@ -147,7 +159,7 @@ func _show_sign_in(message: String) -> void:
 		_button("Sign in with Discord", _start_discord.bind(false))
 	_link("Create an account", _show_sign_up)
 	_link("Forgot your password?", _show_forgot)
-	_link("Play offline", _close)
+	_game_button("Play offline", _close, false)
 	email.grab_focus.call_deferred()
 
 
@@ -242,7 +254,7 @@ func _show_game_menu(message: String) -> void:
 		if OS.has_feature("web") and not _account.get("discord_linked", false):
 			_link("Link your Discord account", _start_discord.bind(true))
 		_link("Change display name", _show_pick_name.bind(""))
-	_link("Leave and play offline", _leave)
+	_game_button("Leave and play offline", _leave, false)
 	if _api != null and _api.has_session():
 		_link("Sign out", _sign_out)
 
@@ -267,14 +279,14 @@ func _show_ready(message: String) -> void:
 	_clear("Signed in as %s" % _account.get("display_name", ""), message)
 	if OS.has_feature("web") and not Network.server_version_mismatch.is_empty():
 		_button("Reload page", func() -> void: JavaScriptBridge.eval("window.location.reload()"))
-		_link("Play", _play)
+		_game_button("Play", _play, false)
 	else:
-		_button("Play", _play)
+		_game_button("Play", _play, true)
 	if OS.has_feature("web") and not _account.get("discord_linked", false):
 		_link("Link your Discord account", _start_discord.bind(true))
 	_link("Change display name", _show_pick_name.bind(""))
 	_link("Sign out", _sign_out)
-	_link("Play offline", _close)
+	_game_button("Play offline", _close, false)
 
 
 func _show_notice(title: String, text: String) -> void:
@@ -296,7 +308,9 @@ func _play() -> void:
 	if result["ok"]:
 		_close()
 		Network.join(_server_url, str((result["data"] as Dictionary).get("ticket", "")))
-	elif result["error"] == "display_name_required":
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if result["error"] == "display_name_required":
 		_show_pick_name("")
 	elif result["status"] == 401:
 		_show_sign_in(_error_text(result))
@@ -314,14 +328,29 @@ func _start_discord(link: bool) -> void:
 	JavaScriptBridge.eval("window.location.assign(%s)" % JSON.stringify(url))
 
 
-## Resume fires on press, not release: the web export requests pointer lock from the
-## browser's mouse-up handler, which only works if the mode changed before it.
 func _resume_button() -> void:
-	_button("Resume", _resume).action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	_game_button("Resume", _close, true)
 
 
-## Closes the menu and grabs the mouse again (the click counts as the user gesture
-## browsers require for pointer lock).
+## A button that returns to the game: it grabs the mouse, then runs `action`. It fires on
+## press so the capture happens inside the click, the user gesture browsers require
+## for pointer lock. If the lock is refused anyway, the menu comes back.
+func _game_button(text: String, action: Callable, primary: bool) -> Button:
+	var button := (
+		_button(text, _capture_then.bind(action))
+		if primary
+		else _link(text, _capture_then.bind(action))
+	)
+	button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	return button
+
+
+func _capture_then(action: Callable) -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	action.call()
+
+
+## Closes the menu and grabs the mouse again (native Esc).
 func _resume() -> void:
 	_close()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

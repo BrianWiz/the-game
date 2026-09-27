@@ -1,6 +1,7 @@
 extends CanvasLayer
-## Corner readouts (version top left, players and connection top right) and
-## click-to-play pointer lock. Styled with Kenney's UI Pack - Space Expansion.
+## Corner readouts: version (top left), players and connection (top right) and controls
+## (bottom left). Styled with Kenney's UI Pack - Space Expansion. When the mouse isn't
+## captured, the menu (ui/login/) is up instead of a click-to-play overlay.
 
 const REFRESH_S := 0.25
 
@@ -10,7 +11,6 @@ var _refresh_in := 0.0
 @onready var _commit: Label = $Corners/Version/Line/Commit
 @onready var _count: Label = $Corners/Players/Lines/Count
 @onready var _status: Label = $Corners/Players/Lines/Status
-@onready var _overlay: Control = $Overlay
 
 
 func _ready() -> void:
@@ -33,10 +33,6 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	_overlay.visible = (
-		Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
-		and not get_tree().get_first_node_in_group(&"modal_ui")
-	)
 	_refresh_in -= delta
 	if _refresh_in <= 0.0:
 		_refresh_in = REFRESH_S
