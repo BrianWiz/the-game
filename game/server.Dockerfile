@@ -1,4 +1,5 @@
 # Dedicated server image. Expects `game/scripts/export.sh server` to have produced build/server/.
+# Designed to run with a read-only root filesystem: Godot's user:// data and logs go to /tmp.
 FROM debian:trixie-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates libfontconfig1 \
@@ -7,6 +8,11 @@ RUN apt-get update \
 WORKDIR /srv/game
 COPY build/server/ ./
 USER game
+ENV XDG_DATA_HOME=/tmp/xdg/data \
+    XDG_CONFIG_HOME=/tmp/xdg/config \
+    XDG_CACHE_HOME=/tmp/xdg/cache
 EXPOSE 7777
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/7777"]
 ENTRYPOINT ["./the-game-server.x86_64", "--headless", "--"]
 CMD ["--server", "--port=7777"]
