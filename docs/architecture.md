@@ -43,10 +43,14 @@ Browser ─────────┘  wss://game.chrisbox.dev (Cloudflare Tunn
   is *pressed*, and pressing on the landing tick skips friction.
 - **Web:** single-threaded web export, so no COOP/COEP headers are needed on GitHub Pages.
   The mouse is captured on click, because browsers require a user gesture for pointer lock.
-- **Menu:** releasing the mouse (Esc, or the browser dropping pointer lock) opens the
-  menu in `ui/login/`: Resume, change display name, link Discord, leave and play offline,
-  and sign out. Browsers swallow the Esc that exits pointer lock, so the menu watches the
-  mouse mode rather than the key.
+- **Menu:** the view is either playing (mouse captured) or showing the menu in
+  `ui/login/`; there is no click-to-play overlay. Whenever the mouse is free with nothing
+  on screen (Esc, a lost or refused pointer lock), the menu opens: Resume, change display
+  name, link Discord, leave and play offline, sign out. Buttons that return to the game
+  capture the mouse on press, inside the click browsers require for pointer lock. On the
+  web, Esc can't re-lock the pointer, so it leaves the menu up; natively it resumes.
+- **HUD corners:** version (top left), players and connection (top right), controls
+  (bottom left).
 
 ### Networking and authority
 
