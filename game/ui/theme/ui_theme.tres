@@ -1,0 +1,176 @@
+[gd_resource type="Theme" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/panel.png" id="panel"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/button_blue.png" id="blue"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/button_blue_hover.png" id="blue_hover"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/button_blue_pressed.png" id="blue_pressed"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/button_grey.png" id="grey"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/button_grey_hover.png" id="grey_hover"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/button_grey_pressed.png" id="grey_pressed"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui/input.png" id="input"]
+[ext_resource type="FontFile" path="res://assets/kenney/ui/kenney_future.ttf" id="font_heading"]
+
+[sub_resource type="StyleBoxTexture" id="panel"]
+content_margin_left = 28.0
+content_margin_top = 24.0
+content_margin_right = 28.0
+content_margin_bottom = 28.0
+texture = ExtResource("panel")
+texture_margin_left = 16.0
+texture_margin_top = 16.0
+texture_margin_right = 16.0
+texture_margin_bottom = 20.0
+
+[sub_resource type="StyleBoxTexture" id="blue"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+texture = ExtResource("blue")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxTexture" id="blue_hover"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+texture = ExtResource("blue_hover")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxTexture" id="blue_pressed"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+texture = ExtResource("blue_pressed")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="grey"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+texture = ExtResource("grey")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxTexture" id="grey_hover"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+texture = ExtResource("grey_hover")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxTexture" id="grey_pressed"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+texture = ExtResource("grey_pressed")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="grey_disabled"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+texture = ExtResource("grey")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 16.0
+modulate_color = Color(1, 1, 1, 0.6)
+
+[sub_resource type="StyleBoxTexture" id="input"]
+content_margin_left = 14.0
+content_margin_top = 6.0
+content_margin_right = 14.0
+content_margin_bottom = 6.0
+texture = ExtResource("input")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxTexture" id="input_focus"]
+content_margin_left = 14.0
+content_margin_top = 6.0
+content_margin_right = 14.0
+content_margin_bottom = 6.0
+texture = ExtResource("input")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+modulate_color = Color(0.82, 0.9, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="focus"]
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.85, 0.3, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+expand_margin_left = 3.0
+expand_margin_top = 3.0
+expand_margin_right = 3.0
+expand_margin_bottom = 3.0
+
+[resource]
+default_font_size = 19
+Button/colors/font_color = Color(1, 1, 1, 1)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/colors/font_pressed_color = Color(0.9, 0.95, 1, 1)
+Button/colors/font_focus_color = Color(1, 1, 1, 1)
+Button/colors/font_disabled_color = Color(0.35, 0.38, 0.45, 1)
+Button/fonts/font = ExtResource("font_heading")
+Button/font_sizes/font_size = 18
+Button/styles/normal = SubResource("blue")
+Button/styles/hover = SubResource("blue_hover")
+Button/styles/pressed = SubResource("blue_pressed")
+Button/styles/disabled = SubResource("grey_disabled")
+Button/styles/focus = SubResource("focus")
+HeadingLabel/base_type = &"Label"
+HeadingLabel/colors/font_color = Color(0.22, 0.25, 0.33, 1)
+HeadingLabel/fonts/font = ExtResource("font_heading")
+HeadingLabel/font_sizes/font_size = 26
+Label/colors/font_color = Color(0.22, 0.25, 0.33, 1)
+LineEdit/colors/font_color = Color(0.22, 0.25, 0.33, 1)
+LineEdit/colors/font_placeholder_color = Color(0.22, 0.25, 0.33, 0.5)
+LineEdit/colors/caret_color = Color(0.22, 0.25, 0.33, 1)
+LineEdit/colors/selection_color = Color(0.55, 0.75, 1, 0.5)
+LineEdit/styles/normal = SubResource("input")
+LineEdit/styles/focus = SubResource("input_focus")
+LineEdit/styles/read_only = SubResource("input")
+PanelContainer/styles/panel = SubResource("panel")
+SecondaryButton/base_type = &"Button"
+SecondaryButton/colors/font_color = Color(0.22, 0.25, 0.33, 1)
+SecondaryButton/colors/font_hover_color = Color(0.22, 0.25, 0.33, 1)
+SecondaryButton/colors/font_pressed_color = Color(0.22, 0.25, 0.33, 1)
+SecondaryButton/colors/font_focus_color = Color(0.22, 0.25, 0.33, 1)
+SecondaryButton/font_sizes/font_size = 15
+SecondaryButton/styles/normal = SubResource("grey")
+SecondaryButton/styles/hover = SubResource("grey_hover")
+SecondaryButton/styles/pressed = SubResource("grey_pressed")

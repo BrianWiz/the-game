@@ -13,6 +13,9 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Leave the mouse alone while a menu (e.g. the login screen) is open.
+	if get_tree().get_first_node_in_group(&"modal_ui"):
+		return
 	# Browsers only grant pointer lock inside a user-gesture handler, so capture on click.
 	var click := event as InputEventMouseButton
 	if click and click.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
@@ -23,7 +26,10 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
-	_overlay.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
+	_overlay.visible = (
+		Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
+		and not get_tree().get_first_node_in_group(&"modal_ui")
+	)
 	var player := get_tree().get_first_node_in_group(&"local_player") as Player
 	_speed.text = "%d u/s" % roundi(player.horizontal_speed_units()) if player else ""
 

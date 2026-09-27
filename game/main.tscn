@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://core/game/game.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://world/room.tscn" id="2_room"]
 [ext_resource type="PackedScene" path="res://ui/hud.tscn" id="3_hud"]
+[ext_resource type="PackedScene" path="res://ui/login/login_screen.tscn" id="4_login"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -15,3 +16,5 @@ script = ExtResource("1_game")
 spawn_path = NodePath("../Players")
 
 [node name="HUD" parent="." instance=ExtResource("3_hud")]
+
+[node name="LoginScreen" parent="." instance=ExtResource("4_login")]

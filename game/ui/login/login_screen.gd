@@ -1,0 +1,383 @@
+extends CanvasLayer
+## Sign-in screen shown before joining an online server (`Network.login_required`).
+##
+## Email/password or Discord sign-in, display-name picker, then "Play" fetches a join
+## ticket and connects. The offline room keeps running behind it, and "Play offline"
+## just closes the screen. Email links and the Discord callback return to the web page
+## with a #fragment (verify=, reset=, forgot, discord_code=, auth_error=), handled here.
+## Styled with Kenney's UI Pack (ui/theme/ui_theme.tres).
+
+const MODAL_GROUP := &"modal_ui"
+const PANEL_WIDTH := 400.0
+const UI_THEME := preload("res://ui/theme/ui_theme.tres")
+const MESSAGE_COLOR := Color(0.3, 0.4, 0.55)
+const ERROR_COLOR := Color(0.8, 0.2, 0.2)
+
+const AUTH_ERRORS := {
+	"discord_cancelled": "Discord sign-in was cancelled.",
+	"discord_expired": "Discord sign-in expired. Try again.",
+	"discord_disabled": "Discord sign-in isn't available right now.",
+	"discord_in_use": "That Discord account belongs to another player.",
+	"discord_already_linked": "This account is already linked to a different Discord account.",
+}
+
+var _api: AccountApi
+var _account := {}
+var _server_url := ""
+var _box: VBoxContainer
+
+
+func _ready() -> void:
+	layer = 10
+	_build()
+	_close()
+	Network.login_required.connect(_on_login_required)
+	Network.connection_failed.connect(_on_connection_failed)
+	if not Network.pending_url.is_empty():
+		_on_login_required(Network.pending_url)
+
+
+func _on_login_required(url: String) -> void:
+	_server_url = url
+	if _api == null:
+		_api = AccountApi.new(Network.resolve_api_url())
+		add_child(_api)
+	_open()
+	var fragment := _take_fragment()
+	if fragment.has("verify"):
+		_show_busy("Confirming your email…")
+		_finish_sign_in(await _api.verify_email(str(fragment["verify"])))
+	elif fragment.has("reset"):
+		_show_reset(str(fragment["reset"]))
+	elif fragment.has("forgot"):
+		_show_forgot()
+	elif fragment.has("discord_code"):
+		_show_busy("Signing in with Discord…")
+		_finish_sign_in(await _api.finish_discord(str(fragment["discord_code"])))
+	elif fragment.has("auth_error"):
+		var code := str(fragment["auth_error"])
+		_resume_session(str(AUTH_ERRORS.get(code, "Discord sign-in failed. Try again.")))
+	else:
+		_resume_session("")
+
+
+func _on_connection_failed(reason: String) -> void:
+	if _server_url.is_empty() or _api == null:
+		return
+	_open()
+	_resume_session(reason)
+
+
+## Shows "ready to play" if the stored session is still good, else the sign-in form.
+func _resume_session(message: String) -> void:
+	if not _api.has_session():
+		_show_sign_in(message)
+		return
+	_show_busy("Signing in…")
+	var result: Dictionary = await _api.me()
+	if result["ok"]:
+		_after_sign_in(result["data"], message)
+	else:
+		_show_sign_in(message if message else _error_text(result))
+
+
+func _finish_sign_in(result: Dictionary) -> void:
+	if result["ok"]:
+		_after_sign_in((result["data"] as Dictionary).get("account", {}), "")
+	else:
+		_show_sign_in(_error_text(result))
+
+
+func _after_sign_in(account: Dictionary, message: String) -> void:
+	_account = account
+	if str(account.get("display_name", "")).is_empty():
+		_show_pick_name("")
+	else:
+		_show_ready(message)
+
+
+# Screens.
+
+
+func _show_sign_in(message: String) -> void:
+	_clear("Sign in", message)
+	var email := _field("Email")
+	var password := _field("Password", true)
+	var submit := func() -> void:
+		_set_busy("Signing in…")
+		var result: Dictionary = await _api.log_in(email.text, password.text)
+		if result["ok"]:
+			_finish_sign_in(result)
+		else:
+			_set_error(_error_text(result))
+	_on_submit(password, submit)
+	_button("Sign in", submit)
+	if OS.has_feature("web"):
+		_button("Sign in with Discord", _start_discord.bind(false))
+	_link("Create an account", _show_sign_up)
+	_link("Forgot your password?", _show_forgot)
+	_link("Play offline", _close)
+	email.grab_focus.call_deferred()
+
+
+func _show_sign_up() -> void:
+	_clear("Create an account", "")
+	var email := _field("Email")
+	var password := _field("Password (8+ characters)", true)
+	var display_name := _field("Display name (3-16 letters, digits, _)")
+	var submit := func() -> void:
+		_set_busy("Creating your account…")
+		var result: Dictionary = await _api.sign_up(email.text, password.text, display_name.text)
+		if result["ok"]:
+			_show_notice(
+				"Check your email", "We sent a link to %s. Open it to finish." % email.text
+			)
+		else:
+			_set_error(_error_text(result))
+	_on_submit(display_name, submit)
+	_button("Create account", submit)
+	_link("Back", _show_sign_in.bind(""))
+	email.grab_focus.call_deferred()
+
+
+func _show_forgot() -> void:
+	_clear("Reset your password", "")
+	var email := _field("Email")
+	var submit := func() -> void:
+		_set_busy("Sending…")
+		var result: Dictionary = await _api.request_reset(email.text)
+		if result["ok"]:
+			_show_notice(
+				"Check your email", "If %s has an account, a reset link is on its way." % email.text
+			)
+		else:
+			_set_error(_error_text(result))
+	_on_submit(email, submit)
+	_button("Send reset link", submit)
+	_link("Back", _show_sign_in.bind(""))
+	email.grab_focus.call_deferred()
+
+
+func _show_reset(token: String) -> void:
+	_clear("Choose a new password", "")
+	var password := _field("New password (8+ characters)", true)
+	var submit := func() -> void:
+		_set_busy("Saving…")
+		var result: Dictionary = await _api.confirm_reset(token, password.text)
+		if result["ok"]:
+			_finish_sign_in(result)
+		elif result["error"] == "invalid_password":
+			_set_error(_error_text(result))
+		else:
+			_show_forgot()
+			_set_error(_error_text(result))
+	_on_submit(password, submit)
+	_button("Set password", submit)
+	password.grab_focus.call_deferred()
+
+
+func _show_pick_name(message: String) -> void:
+	_clear("Pick a display name", message)
+	_label("Other players see this name. 3-16 letters, digits or _.")
+	var display_name := _field("Display name")
+	var submit := func() -> void:
+		_set_busy("Saving…")
+		var result: Dictionary = await _api.set_display_name(display_name.text)
+		if result["ok"]:
+			_account = result["data"]
+			_show_ready("")
+		elif result["status"] == 401:
+			_show_sign_in(_error_text(result))
+		else:
+			_set_error(_error_text(result))
+	_on_submit(display_name, submit)
+	_button("Save", submit)
+	_link("Sign out", _sign_out)
+	display_name.grab_focus.call_deferred()
+
+
+func _show_ready(message: String) -> void:
+	_clear("Signed in as %s" % _account.get("display_name", ""), message)
+	_button("Play", _play)
+	if OS.has_feature("web") and not _account.get("discord_linked", false):
+		_link("Link your Discord account", _start_discord.bind(true))
+	_link("Change display name", _show_pick_name.bind(""))
+	_link("Sign out", _sign_out)
+	_link("Play offline", _close)
+
+
+func _show_notice(title: String, text: String) -> void:
+	_clear(title, "")
+	_label(text)
+	_link("Back to sign in", _show_sign_in.bind(""))
+
+
+func _show_busy(text: String) -> void:
+	_clear(text, "")
+
+
+# Actions.
+
+
+func _play() -> void:
+	_show_busy("Joining…")
+	var result: Dictionary = await _api.join_ticket()
+	if result["ok"]:
+		_close()
+		Network.join(_server_url, str((result["data"] as Dictionary).get("ticket", "")))
+	elif result["error"] == "display_name_required":
+		_show_pick_name("")
+	elif result["status"] == 401:
+		_show_sign_in(_error_text(result))
+	else:
+		_show_ready(_error_text(result))
+
+
+func _start_discord(link: bool) -> void:
+	_show_busy("Opening Discord…")
+	var result: Dictionary = await _api.start_discord(link)
+	if not result["ok"]:
+		_show_sign_in(_error_text(result))
+		return
+	var url := str((result["data"] as Dictionary).get("url", ""))
+	JavaScriptBridge.eval("window.location.assign(%s)" % JSON.stringify(url))
+
+
+func _sign_out() -> void:
+	_show_busy("Signing out…")
+	await _api.log_out()
+	_account = {}
+	_show_sign_in("")
+
+
+func _open() -> void:
+	visible = true
+	add_to_group(MODAL_GROUP)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _close() -> void:
+	visible = false
+	if is_in_group(MODAL_GROUP):
+		remove_from_group(MODAL_GROUP)
+
+
+func _error_text(result: Dictionary) -> String:
+	var message := str(result.get("message", ""))
+	if message.is_empty():
+		return "Something went wrong. Try again."
+	return message.left(1).to_upper() + message.substr(1)
+
+
+## Reads and clears the page's #fragment (web only), e.g. {"verify": "<token>"}.
+func _take_fragment() -> Dictionary:
+	if not OS.has_feature("web"):
+		return {}
+	var raw: Variant = JavaScriptBridge.eval("window.location.hash")
+	var fragment := str(raw).trim_prefix("#") if raw != null else ""
+	if fragment.is_empty():
+		return {}
+	JavaScriptBridge.eval(
+		"history.replaceState(null, '', window.location.pathname + window.location.search)"
+	)
+	var eq := fragment.find("=")
+	if eq < 0:
+		return {fragment: ""}
+	return {fragment.substr(0, eq): fragment.substr(eq + 1).uri_decode()}
+
+
+# Widgets.
+
+
+func _build() -> void:
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.05, 0.06, 0.08, 0.6)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.theme = UI_THEME
+	add_child(backdrop)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.add_child(center)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size.x = PANEL_WIDTH
+	center.add_child(panel)
+	_box = VBoxContainer.new()
+	_box.add_theme_constant_override("separation", 12)
+	panel.add_child(_box)
+
+
+func _clear(title: String, message: String) -> void:
+	for child: Node in _box.get_children():
+		_box.remove_child(child)
+		child.queue_free()
+	var heading := _label(title)
+	heading.theme_type_variation = &"HeadingLabel"
+	var status := _label(message)
+	status.name = "Message"
+	status.add_theme_color_override("font_color", ERROR_COLOR)
+	status.visible = not message.is_empty()
+
+
+## Keeps the form but disables it while a request runs.
+func _set_busy(text: String) -> void:
+	_set_enabled(false)
+	_set_message(text, MESSAGE_COLOR)
+
+
+## Re-enables the form and shows an error above it.
+func _set_error(text: String) -> void:
+	_set_enabled(true)
+	_set_message(text, ERROR_COLOR)
+
+
+func _set_enabled(enabled: bool) -> void:
+	for child: Node in _box.get_children():
+		if child is BaseButton:
+			(child as BaseButton).disabled = not enabled
+		elif child is LineEdit:
+			(child as LineEdit).editable = enabled
+
+
+func _set_message(message: String, color: Color) -> void:
+	var status := _box.get_node_or_null("Message") as Label
+	if status:
+		status.text = message
+		status.add_theme_color_override("font_color", color)
+		status.visible = not message.is_empty()
+
+
+func _label(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_box.add_child(label)
+	return label
+
+
+func _field(placeholder: String, secret: bool = false) -> LineEdit:
+	var edit := LineEdit.new()
+	edit.placeholder_text = placeholder
+	edit.secret = secret
+	edit.custom_minimum_size.y = 44
+	_box.add_child(edit)
+	return edit
+
+
+func _button(text: String, action: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size.y = 48
+	button.pressed.connect(action)
+	_box.add_child(button)
+	return button
+
+
+func _link(text: String, action: Callable) -> Button:
+	var button := _button(text, action)
+	button.theme_type_variation = &"SecondaryButton"
+	button.custom_minimum_size.y = 40
+	return button
+
+
+func _on_submit(edit: LineEdit, action: Callable) -> void:
+	edit.text_submitted.connect(func(_text: String) -> void: action.call())
