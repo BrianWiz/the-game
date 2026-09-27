@@ -1,5 +1,7 @@
 extends CanvasLayer
-## Sign-in screen shown before joining an online server (`Network.login_required`).
+## Sign-in screen shown before joining an online server (`Network.login_required`), and
+## the in-game menu: releasing the mouse (Esc) opens it, with Resume, display name,
+## leave/play offline and sign out.
 ##
 ## Email/password or Discord sign-in, display-name picker, then "Play" fetches a join
 ## ticket and connects. The offline room keeps running behind it, and "Play offline"
@@ -25,6 +27,9 @@ var _api: AccountApi
 var _account := {}
 var _server_url := ""
 var _box: VBoxContainer
+## The in-game menu is showing (Esc closes it).
+var _menu_open := false
+var _was_captured := false
 
 
 func _ready() -> void:
@@ -35,6 +40,32 @@ func _ready() -> void:
 	Network.connection_failed.connect(_on_connection_failed)
 	if not Network.pending_url.is_empty():
 		_on_login_required(Network.pending_url)
+
+
+func _process(_delta: float) -> void:
+	# Browsers exit pointer lock on Esc without passing the key on, so watch the mouse
+	# mode instead of the key: any release while playing opens the menu.
+	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	if _was_captured and not captured and not visible:
+		open_menu()
+	_was_captured = captured
+
+
+func _input(event: InputEvent) -> void:
+	if _menu_open and visible and event.is_action_pressed("release_mouse"):
+		get_viewport().set_input_as_handled()
+		_resume()
+
+
+## Shows the menu that fits the current state: in game, signed out, or offline only.
+func open_menu() -> void:
+	_open()
+	if Network.mode == Network.Mode.CLIENT:
+		_show_game_menu("")
+	elif not _server_url.is_empty():
+		_resume_session("")
+	else:
+		_show_offline_menu()
 
 
 func _on_login_required(url: String) -> void:
@@ -185,20 +216,60 @@ func _show_pick_name(message: String) -> void:
 		var result: Dictionary = await _api.set_display_name(display_name.text)
 		if result["ok"]:
 			_account = result["data"]
-			_show_ready("")
+			if Network.mode == Network.Mode.CLIENT:
+				_show_game_menu("Your new name shows up the next time you join.")
+			else:
+				_show_ready("")
 		elif result["status"] == 401:
 			_show_sign_in(_error_text(result))
 		else:
 			_set_error(_error_text(result))
 	_on_submit(display_name, submit)
 	_button("Save", submit)
+	if not str(_account.get("display_name", "")).is_empty():
+		_link("Back", _back_to_menu)
 	_link("Sign out", _sign_out)
 	display_name.grab_focus.call_deferred()
 
 
+## In-game menu while connected to a server.
+func _show_game_menu(message: String) -> void:
+	var display_name := str(_account.get("display_name", ""))
+	_clear("Signed in as %s" % display_name if display_name else "Menu", message)
+	_menu_open = true
+	_resume_button()
+	if _api != null and _api.has_session():
+		if OS.has_feature("web") and not _account.get("discord_linked", false):
+			_link("Link your Discord account", _start_discord.bind(true))
+		_link("Change display name", _show_pick_name.bind(""))
+	_link("Leave and play offline", _leave)
+	if _api != null and _api.has_session():
+		_link("Sign out", _sign_out)
+
+
+## Menu when no server is configured (native builds default to offline).
+func _show_offline_menu() -> void:
+	_clear("Menu", "")
+	_menu_open = true
+	_resume_button()
+	if not OS.has_feature("web"):
+		_link("Quit", get_tree().quit)
+
+
+func _back_to_menu() -> void:
+	if Network.mode == Network.Mode.CLIENT:
+		_show_game_menu("")
+	else:
+		_show_ready("")
+
+
 func _show_ready(message: String) -> void:
 	_clear("Signed in as %s" % _account.get("display_name", ""), message)
-	_button("Play", _play)
+	if OS.has_feature("web") and not Network.server_version_mismatch.is_empty():
+		_button("Reload page", func() -> void: JavaScriptBridge.eval("window.location.reload()"))
+		_link("Play", _play)
+	else:
+		_button("Play", _play)
 	if OS.has_feature("web") and not _account.get("discord_linked", false):
 		_link("Link your Discord account", _start_discord.bind(true))
 	_link("Change display name", _show_pick_name.bind(""))
@@ -243,7 +314,28 @@ func _start_discord(link: bool) -> void:
 	JavaScriptBridge.eval("window.location.assign(%s)" % JSON.stringify(url))
 
 
+## Resume fires on press, not release: the web export requests pointer lock from the
+## browser's mouse-up handler, which only works if the mode changed before it.
+func _resume_button() -> void:
+	_button("Resume", _resume).action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+
+
+## Closes the menu and grabs the mouse again (the click counts as the user gesture
+## browsers require for pointer lock).
+func _resume() -> void:
+	_close()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Disconnects and keeps playing in the offline room.
+func _leave() -> void:
+	Network.start_offline()
+	_close()
+
+
 func _sign_out() -> void:
+	if Network.mode == Network.Mode.CLIENT:
+		Network.start_offline()
 	_show_busy("Signing out…")
 	await _api.log_out()
 	_account = {}
@@ -258,6 +350,7 @@ func _open() -> void:
 
 func _close() -> void:
 	visible = false
+	_menu_open = false
 	if is_in_group(MODAL_GROUP):
 		remove_from_group(MODAL_GROUP)
 
@@ -307,6 +400,7 @@ func _build() -> void:
 
 
 func _clear(title: String, message: String) -> void:
+	_menu_open = false
 	for child: Node in _box.get_children():
 		_box.remove_child(child)
 		child.queue_free()
