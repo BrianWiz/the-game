@@ -157,7 +157,9 @@ The version is the git commit: `pages.yml` and `server-image.yml` pass `BUILD_VE
 (the commit SHA) to `scripts/export.sh`, which bakes it into a generated
 `res://build_info.gd`. Unexported runs report `dev` and match each other;
 `--build-version=X` overrides it for tests. A refused web client explains the mismatch
-and offers **Reload page**. The HUD shows the short version.
+and offers **Reload page**. The HUD's top-left corner shows the release version
+(`application/config/version` in `project.godot`, bumped by hand at milestones) and the
+short commit hash; the top-right corner shows the player count and connection state.
 
 Because both artifacts come from the same commit, **the server must be deployed right
 after each merge that changes `game/`**: until then, freshly loaded Pages clients are

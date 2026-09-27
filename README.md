@@ -47,4 +47,4 @@ server. Sign-up emails show up in the API's log.
 ## Controls
 
 WASD to move, Space or the mouse wheel to jump (time the press on landing to b-hop),
-mouse to look, Esc to release the cursor.
+mouse to look, Esc for the menu (resume, display name, leave, sign out).
