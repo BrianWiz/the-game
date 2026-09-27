@@ -1,0 +1,40 @@
+[gd_resource type="Theme" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/kenney/ui-space/panel_glass_notch_br.png" id="glass_br"]
+[ext_resource type="Texture2D" path="res://assets/kenney/ui-space/panel_glass_notch_bl.png" id="glass_bl"]
+[ext_resource type="FontFile" path="res://assets/kenney/ui/kenney_future.ttf" id="font_heading"]
+
+[sub_resource type="StyleBoxTexture" id="glass_left"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+texture = ExtResource("glass_br")
+texture_margin_left = 16.0
+texture_margin_top = 16.0
+texture_margin_right = 20.0
+texture_margin_bottom = 20.0
+
+[sub_resource type="StyleBoxTexture" id="glass_right"]
+content_margin_left = 22.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+texture = ExtResource("glass_bl")
+texture_margin_left = 20.0
+texture_margin_top = 16.0
+texture_margin_right = 16.0
+texture_margin_bottom = 20.0
+
+[resource]
+HudPanelLeft/base_type = &"PanelContainer"
+HudPanelLeft/styles/panel = SubResource("glass_left")
+HudPanelRight/base_type = &"PanelContainer"
+HudPanelRight/styles/panel = SubResource("glass_right")
+HudTitle/base_type = &"Label"
+HudTitle/colors/font_color = Color(0.2, 0.24, 0.33, 1)
+HudTitle/fonts/font = ExtResource("font_heading")
+HudTitle/font_sizes/font_size = 16
+HudDetail/base_type = &"Label"
+HudDetail/colors/font_color = Color(0.3, 0.35, 0.45, 1)
+HudDetail/font_sizes/font_size = 13

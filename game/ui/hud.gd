@@ -1,15 +1,22 @@
 extends CanvasLayer
-## Speed readout, connection status, and click-to-play pointer lock.
+## Corner readouts (version top left, players and connection top right) and
+## click-to-play pointer lock. Styled with Kenney's UI Pack - Space Expansion.
 
-@onready var _speed: Label = $Speed
-@onready var _status: Label = $Status
+const REFRESH_S := 0.25
+
+var _refresh_in := 0.0
+
+@onready var _release: Label = $Corners/Version/Line/Release
+@onready var _commit: Label = $Corners/Version/Line/Commit
+@onready var _count: Label = $Corners/Players/Lines/Count
+@onready var _status: Label = $Corners/Players/Lines/Status
 @onready var _overlay: Control = $Overlay
 
 
 func _ready() -> void:
-	Network.mode_changed.connect(_on_mode_changed)
-	Network.connection_failed.connect(_on_connection_failed)
-	_on_mode_changed(Network.mode)
+	_release.text = release_text(Network.game_version())
+	# The hash sits in the body font: Kenney Future would uppercase it.
+	_commit.text = Network.short_version(Network.build_version)
 
 
 func _input(event: InputEvent) -> void:
@@ -25,21 +32,42 @@ func _input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_overlay.visible = (
 		Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
 		and not get_tree().get_first_node_in_group(&"modal_ui")
 	)
-	var player := get_tree().get_first_node_in_group(&"local_player") as Player
-	_speed.text = "%d u/s" % roundi(player.horizontal_speed_units()) if player else ""
+	_refresh_in -= delta
+	if _refresh_in <= 0.0:
+		_refresh_in = REFRESH_S
+		_count.text = player_count_text(_player_count())
+		_status.text = _connection_text()
 
 
-func _on_mode_changed(mode: Network.Mode) -> void:
-	var mode_name: String = Network.Mode.keys()[mode].to_lower()
-	_status.text = "%s · %s" % [mode_name, Network.short_version(Network.build_version)]
+## "v0.3.0", shown next to the build's short commit hash.
+static func release_text(game_version: String) -> String:
+	return "v" + game_version
 
 
-func _on_connection_failed(reason: String) -> void:
-	# Keep the corner short; the menu shows the full reason.
-	var short := reason.get_slice(". ", 0).get_slice("; ", 0)
-	_status.text = "offline · %s (%s)" % [Network.short_version(Network.build_version), short]
+static func player_count_text(count: int) -> String:
+	return "%d player%s" % [count, "" if count == 1 else "s"]
+
+
+func _player_count() -> int:
+	var count := 0
+	for node: Node in get_tree().get_nodes_in_group(&"players"):
+		if not node.is_queued_for_deletion():
+			count += 1
+	return count
+
+
+func _connection_text() -> String:
+	match Network.mode:
+		Network.Mode.CLIENT:
+			# The server shows up as a peer only once our join ticket is accepted.
+			var joined := multiplayer.get_peers().has(MultiplayerPeer.TARGET_PEER_SERVER)
+			return "online" if joined else "connecting…"
+		Network.Mode.SERVER:
+			return "server"
+		_:
+			return "offline"

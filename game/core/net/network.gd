@@ -91,6 +91,11 @@ static func load_build_version() -> String:
 	return version if version else DEV_BUILD
 
 
+## The release version from project.godot (application/config/version), e.g. "0.3.0".
+static func game_version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
+
 ## A version for display: the short commit hash, or "dev".
 static func short_version(version: String) -> String:
 	return version.left(7) if version != DEV_BUILD else version

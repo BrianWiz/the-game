@@ -36,6 +36,7 @@ var _jump_queued := false
 
 
 func _ready() -> void:
+	add_to_group(&"players")
 	_configure_hull()
 	if is_local():
 		add_to_group(&"local_player")
