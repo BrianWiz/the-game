@@ -43,6 +43,10 @@ Browser ─────────┘  wss://game.chrisbox.dev (Cloudflare Tunn
   is *pressed*, and pressing on the landing tick skips friction.
 - **Web:** single-threaded web export, so no COOP/COEP headers are needed on GitHub Pages.
   The mouse is captured on click, because browsers require a user gesture for pointer lock.
+- **Menu:** releasing the mouse (Esc, or the browser dropping pointer lock) opens the
+  menu in `ui/login/`: Resume, change display name, link Discord, leave and play offline,
+  and sign out. Browsers swallow the Esc that exits pointer lock, so the menu watches the
+  mouse mode rather than the key.
 
 ### Networking and authority
 
@@ -147,6 +151,18 @@ tunnel sends `game.chrisbox.dev/api/*` to the API and everything else to the gam
    display name. Otherwise it sends the reason and drops the peer; silent peers time out
    after 5 seconds. A second connection for the same account replaces the first.
 
+**Version check.** The client's auth message is `{"version", "ticket"}`, and the server
+refuses any build but its own before looking at the ticket (so the ticket isn't spent).
+The version is the git commit: `pages.yml` and `server-image.yml` pass `BUILD_VERSION`
+(the commit SHA) to `scripts/export.sh`, which bakes it into a generated
+`res://build_info.gd`. Unexported runs report `dev` and match each other;
+`--build-version=X` overrides it for tests. A refused web client explains the mismatch
+and offers **Reload page**. The HUD shows the short version.
+
+Because both artifacts come from the same commit, **the server must be deployed right
+after each merge that changes `game/`**: until then, freshly loaded Pages clients are
+turned away with the mismatch message.
+
 Unauthenticated peers get no RPCs, spawns or replication. A shared test vector in
 `api/internal/ticket/ticket_test.go` and `game/tests/unit/test_join_ticket.gd` keeps the
 Go signer and the GDScript verifier in step.
@@ -201,8 +217,9 @@ Approvals come from Discord, and a single coordinator applies them in order.
 | API | `api-image.yml` → `ghcr.io/tfpp/the-game-api` | Homelab VM, same compose project |
 | bot | Its own image (planned) | Homelab VM |
 
-The client and server must run the same code. The plan is a protocol/version check on
-join, plus a server deploy triggered by the same merge that updates Pages.
+The client and server must run the same code, and the join handshake enforces it (see
+"Version check"). Deploys are still manual; the plan is a server deploy triggered by the
+same merge that updates Pages.
 
 ## Milestones
 
