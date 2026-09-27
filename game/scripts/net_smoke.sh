@@ -2,7 +2,8 @@
 # Starts a dedicated server + 2 clients headlessly and asserts that every peer
 # sees both players (spawner + synchronizer working) with no script errors.
 # The server runs with --dev-insecure-auth, so clients join with unsigned "dev:" tickets;
-# a third client presents a forged ticket and must be turned away.
+# a third client presents a forged ticket and a fourth runs a different build; both must be
+# turned away with a reason.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 GODOT="${GODOT:-godot}"
@@ -16,12 +17,13 @@ url="ws://127.0.0.1:$PORT"
 "$GODOT" --headless -- --connect="$url" --dev-insecure-auth --name=Alice --debug-roster >"$LOGS/c1.log" 2>&1 &
 "$GODOT" --headless -- --connect="$url" --dev-insecure-auth --name=Bob --debug-roster >"$LOGS/c2.log" 2>&1 &
 "$GODOT" --headless -- --connect="$url" --ticket=v1.forged.ticket >"$LOGS/intruder.log" 2>&1 &
+"$GODOT" --headless -- --connect="$url" --dev-insecure-auth --build-version=stale >"$LOGS/stale.log" 2>&1 &
 sleep 6
 kill $(jobs -p) 2>/dev/null || true
 wait 2>/dev/null || true
 
 fail=0
-for f in server c1 c2 intruder; do
+for f in server c1 c2 intruder stale; do
   if grep -E "SCRIPT ERROR|ERROR:" "$LOGS/$f.log"; then
     echo "$f: errors in log" >&2; fail=1
   fi
@@ -41,6 +43,9 @@ for name in Alice Bob; do
 done
 if ! grep -q "Connection failed: invalid or expired join ticket" "$LOGS/intruder.log"; then
   echo "intruder: forged ticket was not rejected with a reason" >&2; fail=1
+fi
+if ! grep -q "Connection failed: This game is version stale but the server runs dev" "$LOGS/stale.log"; then
+  echo "stale: mismatched build was not rejected with a version reason" >&2; fail=1
 fi
 if [[ $fail -ne 0 ]]; then
   echo "logs: $LOGS" >&2; exit 1

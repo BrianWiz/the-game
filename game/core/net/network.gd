@@ -27,6 +27,12 @@ extends Node
 ## `--dev-insecure-auth` for local tests, which also accepts "dev:<name>" tickets.
 ## Client flags: `--ticket=...`, or `--dev-insecure-auth [--name=Bob]`. Without either,
 ## joining waits for the login screen (`login_required`) to fetch a ticket.
+##
+## Version check: the client's auth message is {"version": <build>, "ticket": <ticket>},
+## and the server turns away any build but its own ("error:version:<server build>")
+## before looking at the ticket. Builds are the git commit CI exported them from
+## (`scripts/export.sh` writes res://build_info.gd); local runs are "dev", and
+## `--build-version=X` overrides it for testing.
 
 signal mode_changed(mode: Mode)
 signal connection_failed(reason: String)
@@ -41,8 +47,13 @@ const DEFAULT_API_SETTING := "game/network/api_url"
 const AUTH_TIMEOUT_S := 5.0
 const DEV_TICKET_PREFIX := "dev:"
 const AUTH_ERROR_PREFIX := "error:"
+const VERSION_ERROR_PREFIX := "version:"
+const BUILD_INFO_PATH := "res://build_info.gd"
+const DEV_BUILD := "dev"
 
 var mode := Mode.OFFLINE
+## This build's version: a git commit SHA from CI, or "dev".
+var build_version := DEV_BUILD
 ## User args after `--`, e.g. {"server": "", "port": "7777"}.
 var args := {}
 ## Server URL waiting for a login (see `login_required`), or "".
@@ -53,6 +64,8 @@ var ticket_key := PackedByteArray()
 var insecure_auth := false
 ## Server: authenticated peers, peer id -> {"account_id": int, "name": String}.
 var peer_accounts := {}
+## Client: the server's build when it refused ours, else "". Reloading fixes it on web.
+var server_version_mismatch := ""
 ## Server: nonce -> expiry of tickets already used, to reject replays.
 var _used_nonces := {}
 
@@ -63,6 +76,24 @@ var _auth_error := ""
 
 func _enter_tree() -> void:
 	args = _parse_user_args()
+	# `--build-version=` pretends to be another build (tests of the version check).
+	build_version = (
+		str(args.get("build-version", "")) if args.get("build-version") else load_build_version()
+	)
+
+
+## Reads the version CI baked into res://build_info.gd, or "dev" if there is none.
+static func load_build_version() -> String:
+	if not ResourceLoader.exists(BUILD_INFO_PATH):
+		return DEV_BUILD
+	var script := load(BUILD_INFO_PATH) as GDScript
+	var version := str(script.get_script_constant_map().get("VERSION", "")) if script else ""
+	return version if version else DEV_BUILD
+
+
+## A version for display: the short commit hash, or "dev".
+static func short_version(version: String) -> String:
+	return version.left(7) if version != DEV_BUILD else version
 
 
 ## Whether a flag like `--debug-roster` was passed after `--`.
@@ -136,7 +167,7 @@ func start_server(port: int) -> Error:
 	multiplayer.multiplayer_peer = peer
 	if not multiplayer.peer_disconnected.is_connected(_on_server_peer_disconnected):
 		multiplayer.peer_disconnected.connect(_on_server_peer_disconnected)
-	print("Server listening on port %d" % port)
+	print("Server listening on port %d (build %s)" % [port, build_version])
 	_set_mode(Mode.SERVER)
 	return OK
 
@@ -146,6 +177,7 @@ func start_server(port: int) -> Error:
 func join(url: String, ticket: String) -> Error:
 	_ticket = ticket
 	_auth_error = ""
+	server_version_mismatch = ""
 	pending_url = ""
 	var peer := WebSocketMultiplayerPeer.new()
 	var err := peer.create_client(url)
@@ -174,6 +206,27 @@ func start_offline() -> void:
 ## Display name of a connected peer (server side), or "" if unknown.
 func peer_name(peer_id: int) -> String:
 	return str((peer_accounts.get(peer_id, {}) as Dictionary).get("name", ""))
+
+
+## Client: the auth message sent to the server.
+func join_request(ticket: String) -> String:
+	return JSON.stringify({"version": build_version, "ticket": ticket})
+
+
+## Server: checks a client's auth message (see `join_request`). Returns
+## {"account": {"account_id", "name"}} or {"error": <reason sent to the client>}.
+## The version is checked first, so a mismatched client doesn't burn its ticket.
+func check_join_request(message: String, peer_id: int, now: int) -> Dictionary:
+	var json := JSON.new()
+	# Clients older than the version check send a bare ticket, which isn't JSON.
+	var request: Variant = json.data if json.parse(message) == OK else null
+	var version: Variant = (request as Dictionary).get("version") if request is Dictionary else null
+	if not version is String or version != build_version:
+		return {"error": VERSION_ERROR_PREFIX + build_version}
+	var account := authenticate_ticket(str((request as Dictionary).get("ticket", "")), peer_id, now)
+	if account.is_empty():
+		return {"error": "invalid or expired join ticket; sign in again"}
+	return {"account": account}
 
 
 ## Server: checks a ticket and consumes its nonce. Returns {"account_id", "name"} or {}.
@@ -212,11 +265,16 @@ func _on_server_auth(peer_id: int, data: PackedByteArray) -> void:
 	if peer_accounts.has(peer_id):
 		return
 	var now := int(Time.get_unix_time_from_system())
-	var account := authenticate_ticket(data.get_string_from_utf8(), peer_id, now)
-	if account.is_empty():
-		print("Peer %d rejected: invalid, expired or reused join ticket" % peer_id)
-		_reject_peer(peer_id, "invalid or expired join ticket; sign in again")
+	var result := check_join_request(data.get_string_from_utf8(), peer_id, now)
+	if result.has("error"):
+		var reason: String = result["error"]
+		if reason.begins_with(VERSION_ERROR_PREFIX):
+			print("Peer %d rejected: client build doesn't match %s" % [peer_id, build_version])
+		else:
+			print("Peer %d rejected: invalid, expired or reused join ticket" % peer_id)
+		_reject_peer(peer_id, reason)
 		return
+	var account: Dictionary = result["account"]
 	var account_id: int = account["account_id"]
 	if account_id != 0:
 		# One connection per account: the newest one wins.
@@ -270,14 +328,24 @@ func _on_client_authenticating(peer_id: int) -> void:
 	if peer_id != MultiplayerPeer.TARGET_PEER_SERVER:
 		return
 	var scene := _scene_multiplayer()
-	scene.send_auth(peer_id, _ticket.to_utf8_buffer())
+	scene.send_auth(peer_id, join_request(_ticket).to_utf8_buffer())
 	scene.complete_auth(peer_id)
 
 
 func _on_client_auth(_peer_id: int, data: PackedByteArray) -> void:
 	var message := data.get_string_from_utf8()
-	if message.begins_with(AUTH_ERROR_PREFIX):
-		_auth_error = message.trim_prefix(AUTH_ERROR_PREFIX)
+	if not message.begins_with(AUTH_ERROR_PREFIX):
+		return
+	_auth_error = message.trim_prefix(AUTH_ERROR_PREFIX)
+	if _auth_error.begins_with(VERSION_ERROR_PREFIX):
+		server_version_mismatch = _auth_error.trim_prefix(VERSION_ERROR_PREFIX)
+		_auth_error = (
+			(
+				"This game is version %s but the server runs %s. Reload the page to update; "
+				% [short_version(build_version), short_version(server_version_mismatch)]
+			)
+			+ "if that doesn't help, the server is being updated, so try again in a few minutes."
+		)
 
 
 func _on_client_authentication_failed(_peer_id: int) -> void:

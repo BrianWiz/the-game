@@ -45,3 +45,9 @@ func test_project_default_api_is_https() -> void:
 func test_api_arg_overrides_default() -> void:
 	Network.args = {"api": "http://127.0.0.1:8080/api/"}
 	assert_eq(Network.resolve_api_url(), "http://127.0.0.1:8080/api")
+
+
+func test_unexported_builds_are_dev() -> void:
+	assert_eq(Network.load_build_version(), "dev")
+	assert_eq(Network.short_version("dev"), "dev")
+	assert_eq(Network.short_version("6ae5b21013eedfda16ea"), "6ae5b21")

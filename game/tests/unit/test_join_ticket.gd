@@ -96,3 +96,35 @@ func test_load_key_trims_and_requires_length() -> void:
 	file.close()
 	assert_eq(JoinTicket.load_key(path), PackedByteArray())
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _request(version: String, ticket: String) -> String:
+	return JSON.stringify({"version": version, "ticket": ticket})
+
+
+func test_join_request_round_trips() -> void:
+	var result := Network.check_join_request(Network.join_request(VECTOR_TICKET), 5, NOW)
+	assert_eq(result, {"account": {"account_id": 42, "name": "Bob_the_Builder"}})
+
+
+func test_version_mismatch_is_refused_before_the_ticket() -> void:
+	var result := Network.check_join_request(_request("someotherbuild", VECTOR_TICKET), 5, NOW)
+	assert_eq(result.get("error"), "version:" + Network.build_version)
+	# The ticket wasn't consumed, so the right build can still use it.
+	var retry := Network.check_join_request(_request(Network.build_version, VECTOR_TICKET), 5, NOW)
+	assert_true(retry.has("account"))
+
+
+func test_old_clients_sending_a_bare_ticket_get_a_version_error() -> void:
+	var result := Network.check_join_request(VECTOR_TICKET, 5, NOW)
+	assert_eq(result.get("error"), "version:" + Network.build_version)
+
+
+func test_malformed_requests_are_refused_quietly() -> void:
+	for bad: String in ["", "{", "[1,2]", '{"version": 7}', "null"]:
+		assert_true(Network.check_join_request(bad, 5, NOW).has("error"), bad)
+
+
+func test_bad_ticket_with_right_version_is_a_ticket_error() -> void:
+	var result := Network.check_join_request(_request(Network.build_version, "v1.forged"), 5, NOW)
+	assert_eq(result.get("error"), "invalid or expired join ticket; sign in again")

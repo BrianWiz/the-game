@@ -35,8 +35,11 @@ func _process(_delta: float) -> void:
 
 
 func _on_mode_changed(mode: Network.Mode) -> void:
-	_status.text = Network.Mode.keys()[mode].to_lower()
+	var mode_name: String = Network.Mode.keys()[mode].to_lower()
+	_status.text = "%s · %s" % [mode_name, Network.short_version(Network.build_version)]
 
 
 func _on_connection_failed(reason: String) -> void:
-	_status.text = "offline (%s)" % reason
+	# Keep the corner short; the menu shows the full reason.
+	var short := reason.get_slice(". ", 0).get_slice("; ", 0)
+	_status.text = "offline · %s (%s)" % [Network.short_version(Network.build_version), short]
