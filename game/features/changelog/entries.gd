@@ -11,6 +11,30 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Codex subscription usage",
+		"summary":
+		(
+			"Discord's /usage command now shows both Claude and Codex subscription limits,"
+			+ " with reset times and separate status for each provider."
+		)
+	},
+	{
+		"title": "Feature builder usage reports",
+		"summary":
+		(
+			"PRs and Discord build updates now show the model, tokens used, and estimated"
+			+ " API-equivalent cost, with readable PR-number links."
+		)
+	},
+	{
+		"title": "Choose your feature builder",
+		"summary":
+		(
+			"Discord's /feature command now requires a harness choice: Claude or Codex."
+			+ " Your choice also handles revisions and conflict fixes for that feature."
+		)
+	},
+	{
 		"title": "Wall sconces",
 		"summary": "Brass 1960s wall sconces light the annex, glowing brightest at night."
 	},

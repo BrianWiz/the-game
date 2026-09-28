@@ -19,7 +19,6 @@ import (
 	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 
-	"github.com/tfpp/the-game/bot/internal/claude"
 	"github.com/tfpp/the-game/bot/internal/core"
 )
 
@@ -34,12 +33,13 @@ type Config struct {
 	Logger           *slog.Logger
 }
 
-// Bot is the Discord side of the bot. Set Service (and optionally Claude) before Open.
+// Bot is the Discord side of the bot. Set Service (and optionally usage reporters) before Open.
 type Bot struct {
 	cfg     Config
 	client  *bot.Client
 	Service *core.Service
-	Claude  *claude.Client // nil: /usage says it isn't set up
+	Claude  UsageReporter // nil: /usage says Claude isn't set up
+	Codex   UsageReporter // nil: /usage says Codex isn't set up
 }
 
 // noMentions is the default: messages never ping anyone unless a call allows it.
@@ -72,10 +72,19 @@ var (
 			Name:        "feature",
 			Description: "Ask the agent to build a feature for the game",
 			Contexts:    []discord.InteractionContextType{discord.InteractionContextTypeGuild},
-			Options: []discord.ApplicationCommandOption{discord.ApplicationCommandOptionString{
-				Name: "request", Description: "What should it do?", Required: true,
-				MinLength: &minLen, MaxLength: &maxLen,
-			}},
+			Options: []discord.ApplicationCommandOption{
+				discord.ApplicationCommandOptionString{
+					Name: "request", Description: "What should it do?", Required: true,
+					MinLength: &minLen, MaxLength: &maxLen,
+				},
+				discord.ApplicationCommandOptionString{
+					Name: "harness", Description: "Which coding harness should build and revise this feature?", Required: true,
+					Choices: []discord.ApplicationCommandOptionChoiceString{
+						{Name: "claude", Value: "claude"},
+						{Name: "codex", Value: "codex"},
+					},
+				},
+			},
 		},
 		discord.SlashCommandCreate{
 			Name:        "revise",
@@ -109,7 +118,7 @@ var (
 		},
 		discord.SlashCommandCreate{
 			Name:        "usage",
-			Description: "Show how much of Claude's usage limits the agent has used",
+			Description: "Show the agent's Claude and Codex subscription usage limits",
 			Contexts:    []discord.InteractionContextType{discord.InteractionContextTypeGuild},
 		},
 	}
@@ -194,7 +203,7 @@ func (b *Bot) onCommand(e *events.ApplicationCommandInteractionCreate) {
 		default:
 			err = b.Service.Feature(ctx, core.FeatureRequest{
 				UserID: member.User.ID.String(), UserName: name, HasRole: hasRole,
-				ChannelID: ch.ID().String(), Text: data.String("request"),
+				ChannelID: ch.ID().String(), Text: data.String("request"), Harness: data.String("harness"),
 			}, r)
 		}
 	case "revise":
@@ -220,15 +229,7 @@ func (b *Bot) onCommand(e *events.ApplicationCommandInteractionCreate) {
 		if err = r.Defer(ctx); err != nil {
 			break
 		}
-		text, uerr := b.Claude.Report(ctx)
-		switch {
-		case errors.Is(uerr, claude.ErrNoToken):
-			text = "Claude usage isn't set up on this bot."
-		case uerr != nil:
-			b.cfg.Logger.Error("claude usage failed", "err", uerr)
-			text = "❌ Couldn't get Claude's usage limits. Try again later."
-		}
-		err = r.Respond(ctx, text)
+		err = r.Respond(ctx, b.usageReport(ctx))
 	default:
 		return
 	}

@@ -16,14 +16,22 @@ from the thread, and the bot merges approved PRs one at a time, then deploys the
 
 ## How it works
 
-1. **`/feature <request>`** in a text channel (optionally only `BOT_FEATURE_CHANNEL_ID`).
+1. **`/feature request:<text> harness:<claude|codex>`** in a text channel (optionally only
+   `BOT_FEATURE_CHANNEL_ID`). Both parameters are required. The selected harness is
+   saved with the feature and used for its initial run, queued runs, `/revise`, and
+   automatic conflict resolution, including after bot restarts. Claude defaults to
+   **Opus 5.5** with low effort; Codex defaults to **GPT-6 Astra** with low reasoning.
+   Configure both credentials in [the harness setup](../harness/README.md#setup).
    The user needs `BOT_REQUESTER_ROLE_ID`. The bot reserves a run against the limits,
    opens an issue whose body ends in `Requested-by: <name> <discord:<id>>` (the harness
    credits that person in the PR), answers publicly, opens a thread on the answer, and
    dispatches `agent.yml` (`mode=implement`, `request_id=bot-<run>`).
 2. **Progress** reaches the thread from the App's webhooks:
    - `issue_comment`: the harness's 🤖 comments on the issue or PR ("Starting…",
-     "Opened <PR>", failures with a link to the logs).
+     "Opened <PR>", failures with a link to the logs). Opened and Pushed notifications
+     include the model(s), tokens used, and estimated API-equivalent cost for that run;
+     missing telemetry is marked unavailable. PR links display as **PR #123** rather
+     than a bare URL.
    - `workflow_run`: agent runs are matched by their run name
      (`agent #N mode [bot-<run>]`) to track status. The bot speaks up itself only if a
      run ends without any 🤖 comment: the gate refused it (for example, the App's login
@@ -98,11 +106,34 @@ the waiting ones in the order they'll start (issue or PR, mode, status, who star
 run link), and `/queue which:merge queue`
 lists approved PRs in merge order with their state.
 
-**`/usage`** answers privately, to anyone: how much of the Claude subscription's 5-hour and
-weekly limits the agent has used, with when each resets, and a warning when a limit is near
-or reached. The agent's `claude setup-token` token can't read the account's usage endpoint,
-so the bot sends a one-token Haiku request with it and reads the `anthropic-ratelimit-unified-*`
-response headers. The answer is cached for a minute, so repeated `/usage` costs almost nothing.
+**`/usage`** answers privately, to anyone, with **Claude and Codex subscription limits**:
+percent used, reset times, and warnings near or at a limit. One provider being unavailable
+or unconfigured does not hide the other. Each provider's successful response is cached
+for a minute.
+
+- **Claude:** the agent's `claude setup-token` token can't read the account's usage
+  endpoint, so the bot sends a one-token Haiku request and reads the
+  `anthropic-ratelimit-unified-*` response headers.
+- **Codex:** the bot reads the ChatGPT subscription usage endpoint using a mounted Codex
+  `auth.json`. It does not run a model or spend inference tokens. This reports account
+  quota, not the per-run token/cost estimates in PR notifications.
+
+To enable Codex usage, mount a file-backed ChatGPT Codex login at
+`/run/secrets/bot/codex-auth.json` (or set `BOT_CODEX_AUTH_FILE`). It must be readable by
+UID 10040 and protected like a password. A GitHub Actions `CODEX_AUTH_JSON` secret is
+**not automatically available to the bot**. Supply the same account's login separately;
+API-key-only authentication cannot report ChatGPT subscription limits. If `codex login`
+uses the OS keyring, use `codex -c cli_auth_credentials_store='"file"' login` to create
+an auth file before provisioning it.
+
+The bot rereads that file after its one-minute cache expires; replacing the mounted
+login does not require a restart. It never refreshes or writes tokens, avoiding refresh
+rotation conflicts with the CLI/Actions login and supporting read-only secret mounts.
+When authentication expires, `/usage` asks for a refreshed login: log in with Codex
+locally and replace the bot's auth file. Recreate the container if your secret mount
+mechanism does not expose file replacements. The usage endpoint is the one used by
+Codex itself, not a stable public API; upstream schema changes are reported as unavailable
+rather than as zero usage.
 
 **Limits** count every run (features and revisions) except ones that never started:
 `BOT_RUNS_PER_USER` per rolling 24 hours (default 5), and at most `BOT_MAX_ACTIVE_RUNS`
@@ -129,6 +160,7 @@ Environment variables; secrets are files.
 | `BOT_GITHUB_WEBHOOK_SECRET_FILE` | `/run/secrets/bot/github-webhook-secret` | Webhook secret |
 | `BOT_DISCORD_TOKEN_FILE` | `/run/secrets/bot/discord-token` | Discord bot token |
 | `BOT_CLAUDE_TOKEN_FILE` | `/run/secrets/bot/claude-token` | The agent's `CLAUDE_CODE_OAUTH_TOKEN`, for `/usage`; optional |
+| `BOT_CODEX_AUTH_FILE` | `/run/secrets/bot/codex-auth.json` | File-backed Codex ChatGPT login for `/usage`; optional, reread on cache misses |
 | `BOT_GUILD_ID` | required | The Discord server |
 | `BOT_REQUESTER_ROLE_ID` | required | Role allowed to use `/feature`, `/revise` and `/close` |
 | `BOT_APPROVER_ROLE_ID` | none | Role allowed to approve merges; without it nobody can |
@@ -137,7 +169,8 @@ Environment variables; secrets are files.
 | `BOT_MAX_ACTIVE_RUNS` | `5` | Concurrent runs; `0` for no limit |
 | `BOT_DEPLOY_DIR` | off | Directory shared with the host's deploy service |
 | `BOT_RELEASE_CHANNEL_ID` | off | Channel for release and edge announcements (needs `BOT_DEPLOY_DIR`) |
-| `BOT_REF`, `BOT_WORKFLOW`, `BOT_CI_WORKFLOW`, `BOT_AGENT` | `main`, `agent.yml`, `game-ci.yml`, `claude` | |
+| `BOT_REF`, `BOT_WORKFLOW`, `BOT_CI_WORKFLOW` | `main`, `agent.yml`, `game-ci.yml` | |
+| `BOT_AGENT` | `claude` | Fallback only for old jobs created before per-feature harness selection; new requests always use their required `harness` choice |
 | `BOT_SERVER_WORKFLOW`, `BOT_PAGES_WORKFLOW` | `server-image.yml`, `pages.yml` | Builds that gate a deploy |
 | `BOT_API_WORKFLOW` | `api-image.yml` | Build that deploys the accounts API |
 | `BOT_PREVIEW_WORKFLOW`, `BOT_PREVIEW_URL` | `preview.yml`, `https://pr-{pr}.tfpp-game.pages.dev/` | PR preview deploys and their link (`{pr}` is the PR number) |
@@ -186,7 +219,7 @@ starts.
 
 The image is `ghcr.io/tfpp/the-game-bot`, built by `bot-image.yml` on pushes to `main`
 that touch `bot/`. It runs as UID 10040 with a read-only root filesystem. State goes in
-`/data`, and the secret files in `/run/secrets/bot/` (the Claude token is optional). For automatic server and API deploys,
+`/data`, and the secret files in `/run/secrets/bot/` (the Claude token and Codex auth file are optional). For automatic server and API deploys,
 mount a directory the host's deploy service watches and set `BOT_DEPLOY_DIR` to it. Add a Cloudflare Tunnel route
 for exactly `game.chrisbox.dev` path `^/bot/github$` → `http://bot:8081`, placed before
 the catch-all game-server rule. Don't route `/bot/health` publicly.
