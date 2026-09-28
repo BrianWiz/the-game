@@ -732,6 +732,90 @@ func (s *Service) announceDeploys(ctx context.Context) error {
 	return s.st.Set(ctx, deployAnnouncedKey, deployed)
 }
 
+// --- /queue --------------------------------------------------------------------------------
+
+// Queue describes the agent runs ("agent") or the merge queue ("merge").
+func (s *Service) Queue(ctx context.Context, kind string) (string, error) {
+	var b strings.Builder
+	switch kind {
+	case "agent":
+		runs, err := s.st.ActiveRuns(ctx)
+		if err != nil {
+			return "", err
+		}
+		if len(runs) == 0 {
+			return "No agent runs are active.", nil
+		}
+		fmt.Fprintf(&b, "**Agent runs** (%d active", len(runs))
+		if s.cfg.Limits.MaxActive > 0 {
+			fmt.Fprintf(&b, ", at most %d at once", s.cfg.Limits.MaxActive)
+		}
+		b.WriteString(")\n")
+		for i, r := range runs {
+			line := fmt.Sprintf("%d. ", i+1)
+			if job, err := s.st.JobByID(ctx, r.JobID); err == nil {
+				n, what := job.Issue, "issue"
+				if r.Mode != "implement" && job.PR != 0 {
+					n, what = job.PR, "PR"
+				}
+				line += fmt.Sprintf("%s #%d %s", what, n, escape(job.Title))
+				if job.ThreadID != "" {
+					line += fmt.Sprintf(" (<#%s>)", job.ThreadID)
+				}
+			} else {
+				line += "a new feature"
+			}
+			line += fmt.Sprintf(" · %s · %s", r.Mode, strings.ReplaceAll(r.Status, "_", " "))
+			if r.UserID == autoUser {
+				line += " · started by the merge queue"
+			} else {
+				line += fmt.Sprintf(" · by <@%s>", r.UserID)
+			}
+			line += fmt.Sprintf(" · <t:%d:R>", r.CreatedAt.Unix())
+			if r.RunURL != "" {
+				line += fmt.Sprintf(" · [run](<%s>)", r.RunURL)
+			}
+			b.WriteString(line + "\n")
+		}
+	case "merge":
+		queue, err := s.st.MergeQueue(ctx)
+		if err != nil {
+			return "", err
+		}
+		if len(queue) == 0 {
+			return "The merge queue is empty.", nil
+		}
+		b.WriteString("**Merge queue** (merged in this order, one at a time)\n")
+		for i, m := range queue {
+			line := fmt.Sprintf("%d. PR #%d", i+1, m.PR)
+			if job, err := s.st.JobByID(ctx, m.JobID); err == nil {
+				line += " " + escape(job.Title)
+				if job.ThreadID != "" {
+					line += fmt.Sprintf(" (<#%s>)", job.ThreadID)
+				}
+			}
+			status := "waiting"
+			switch {
+			case m.Status == store.MergeUpdating:
+				status = "updating with " + s.cfg.Ref
+			case m.Status == store.MergeTesting:
+				status = "waiting for CI"
+			case i == 0:
+				status = "merging"
+			}
+			line += fmt.Sprintf(" · %s · approved by <@%s> <t:%d:R>", status, m.ApproverID, m.CreatedAt.Unix())
+			b.WriteString(line + "\n")
+		}
+	default:
+		return "", fmt.Errorf("unknown queue %q", kind)
+	}
+	out := b.String()
+	if r := []rune(out); len(r) > 1900 {
+		out = string(r[:1900]) + "…"
+	}
+	return out, nil
+}
+
 func short(sha string) string {
 	if len(sha) > 7 {
 		return sha[:7]

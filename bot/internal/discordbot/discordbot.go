@@ -88,6 +88,18 @@ var (
 			Description: "Approve this thread's PR at its latest commit and queue it for merging",
 			Contexts:    []discord.InteractionContextType{discord.InteractionContextTypeGuild},
 		},
+		discord.SlashCommandCreate{
+			Name:        "queue",
+			Description: "Show the agent runs or the merge queue",
+			Contexts:    []discord.InteractionContextType{discord.InteractionContextTypeGuild},
+			Options: []discord.ApplicationCommandOption{discord.ApplicationCommandOptionString{
+				Name: "which", Description: "Which queue", Required: true,
+				Choices: []discord.ApplicationCommandOptionChoiceString{
+					{Name: "agent runs", Value: "agent"},
+					{Name: "merge queue", Value: "merge"},
+				},
+			}},
+		},
 	}
 )
 
@@ -181,6 +193,11 @@ func (b *Bot) onCommand(e *events.ApplicationCommandInteractionCreate) {
 	case "approve":
 		r = private
 		err = b.Service.Approve(ctx, b.approveRequest(member, ch.ID(), ""), r)
+	case "queue":
+		var text string
+		if text, err = b.Service.Queue(ctx, data.String("which")); err == nil {
+			err = r.Reject(ctx, text) // private
+		}
 	default:
 		return
 	}

@@ -474,6 +474,32 @@ func TestDeployAfterBothBuilds(t *testing.T) {
 	}
 }
 
+func TestQueue(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if s, _ := e.svc.Queue(ctx, "agent"); s != "No agent runs are active." {
+		t.Errorf("empty agent queue %q", s)
+	}
+	if s, _ := e.svc.Queue(ctx, "merge"); s != "The merge queue is empty." {
+		t.Errorf("empty merge queue %q", s)
+	}
+	job := e.withPR(t, "42", 12, "aaa")
+	e.feature(t, "7", "add a scoreboard")
+	s, err := e.svc.Queue(ctx, "agent")
+	must(t, err)
+	if !strings.Contains(s, "1 active, at most 2 at once") || !strings.Contains(s, "issue #12 add a scoreboard (<#thread2>) · implement · dispatched · by <@7>") {
+		t.Errorf("agent queue %q", s)
+	}
+	e.gh.behind["aaa"] = 1
+	e.approve(t, job, true, "")
+	must(t, e.svc.MergeStep(ctx))
+	s, err = e.svc.Queue(ctx, "merge")
+	must(t, err)
+	if !strings.Contains(s, "1. PR #12 feature for PR 12 please (<#thread1>) · updating with main · approved by <@99>") {
+		t.Errorf("merge queue %q", s)
+	}
+}
+
 func TestProtectedPaths(t *testing.T) {
 	pats := codeownersPatterns("# comment\n/.github/ @a\n\n/game/core/net/ @a\n/game/project.godot @a\n")
 	files := []string{"game/features/a.gd", "game/core/net/n.gd", "game/project.godot", ".github/x", "game/project.godot.bak", "game/core/netx"}
