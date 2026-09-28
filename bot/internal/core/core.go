@@ -318,16 +318,22 @@ func (s *Service) agentRun(ctx context.Context, wr github.WorkflowRun) error {
 	if err := s.setRun(ctx, run.ID, status, wr.Conclusion, wr.ID, wr.HTMLURL); err != nil {
 		return err
 	}
-	if status != store.RunCompleted || wr.Conclusion == "success" || (wr.Conclusion == "failure" && run.Relayed > 0) {
+	// Every run that gets past the gate ends with a harness comment. Say something if none
+	// arrived: the gate refused the dispatch (the run still succeeds), or it was cancelled.
+	if status != store.RunCompleted || run.Relayed > 0 {
 		return nil
 	}
-	// Failures normally explain themselves in a comment; say something if nothing did.
 	job, err := s.st.JobByID(ctx, run.JobID)
 	if err != nil {
 		return err
 	}
-	s.post(ctx, job, fmt.Sprintf("⚠️ <@%s> The agent run ended without a result (`%s`). [Run](<%s>)",
-		job.RequesterID, wr.Conclusion, wr.HTMLURL), job.RequesterID)
+	msg := fmt.Sprintf("⚠️ <@%s> The agent run ended without a result (`%s`). [Run](<%s>)",
+		job.RequesterID, wr.Conclusion, wr.HTMLURL)
+	if wr.Conclusion == "success" {
+		msg = fmt.Sprintf("⚠️ <@%s> The workflow refused to start the agent; its gate log says why. [Run](<%s>)",
+			job.RequesterID, wr.HTMLURL)
+	}
+	s.post(ctx, job, msg, job.RequesterID)
 	return nil
 }
 

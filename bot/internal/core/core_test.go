@@ -275,6 +275,17 @@ func TestCancelledRunWithoutCommentsIsReported(t *testing.T) {
 	}
 }
 
+func TestRunRefusedByTheGateIsReported(t *testing.T) {
+	e := newEnv(t)
+	e.feature(t, "42", "add jump pads please")
+	// The gate refused it: the workflow succeeds, but no harness comment arrives.
+	must(t, e.svc.WorkflowRun(context.Background(), github.WorkflowRun{ID: 1, Path: ".github/workflows/agent.yml",
+		DisplayTitle: "agent #11 implement [bot-1]", Status: "completed", Conclusion: "success", HTMLURL: "https://run"}))
+	if p := e.chat.last(); !strings.Contains(p.content, "refused to start") || p.ping != "42" {
+		t.Errorf("post %+v", p)
+	}
+}
+
 func TestRevise(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

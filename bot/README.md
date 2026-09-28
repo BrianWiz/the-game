@@ -25,7 +25,9 @@ through its GitHub App, starts `agent.yml`, and reports progress in a Discord th
      "Opened <PR>", failures with a link to the logs).
    - `workflow_run`: agent runs are matched by their run name
      (`agent #N mode [bot-<run>]`) to track status. The bot speaks up itself only if a
-     run ends without a result, such as when it's cancelled. `game-ci` runs on
+     run ends without any 🤖 comment: the gate refused it (for example, the App's login
+     isn't in `AGENT_TRUSTED_BOTS`, which has to change if the App is renamed) or it was
+     cancelled. `game-ci` runs on
      `agent/<issue>-…` branches post "CI passed" or "CI failed".
    - `pull_request`: merged or closed.
    A reconcile loop (every 2 minutes, only while runs are active) polls the agent runs and
