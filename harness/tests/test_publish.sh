@@ -122,6 +122,14 @@ publish
 grep -q "workflows" "$work/comments" || fail "no refusal comment"
 git -C "$origin" rev-parse -q --verify agent/5-jump-pads >/dev/null && fail "workflow change was pushed"
 
+echo "- a rejected push is reported with the reason"
+scenario <<<'echo pad >game/pad.txt'
+(cd "$work/seed$n" && git switch -qc agent/5-jump-pads && echo other >game/other.txt && git add -A &&
+  git commit -qm other && git push -q origin agent/5-jump-pads)
+publish
+[[ "$code" == 1 ]] || fail "expected exit 1, got $code"
+grep -q "Someone pushed to the branch" "$work/comments" || fail "no rejection reason: $(cat "$work/comments")"
+
 echo "- a missing artifact is reported"
 scenario <<<'true'
 out="$work/nothing" publish

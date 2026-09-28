@@ -35,10 +35,10 @@ fence() {
     "$(basename "$1")" "$(tail -n "$2" "$1" | cut -c1-300 | sed 's/````/```/g')"
 }
 
-report_failure() { # report_failure MESSAGE
+report_failure() { # report_failure MESSAGE [nologs]
   {
     printf '🤖 `%s` (`%s`) did not produce a change: %s (%s)\n' "$AGENT" "$MODE" "$1" "$run_link"
-    if [[ -d "${OUT:-}" ]]; then
+    if [[ -d "${OUT:-}" && -z "${2:-}" ]]; then
       last_verify="$(find "$OUT" -name 'verify-*.log' | sort -V | tail -n 1)"
       [[ -z "$last_verify" ]] || fence "$last_verify" 60
       fence "$OUT/last-message.md" 40
@@ -100,7 +100,13 @@ auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | t
 if ! git -c "http.https://github.com/.extraheader=$auth" push -q \
   "${HARNESS_PUSH_URL:-https://github.com/$repo.git}" "refs/harness/result:refs/heads/$BRANCH" 2>"$tmp/push.log"; then
   cat "$tmp/push.log" >&2
-  report_failure "pushing \`$BRANCH\` failed (did someone push to it during the run?)"
+  reason="$(grep -E '^ ! |^remote: |^error: ' "$tmp/push.log" | head -n 5 | cut -c1-300)"
+  hint=""
+  grep -q 'without `workflows` permission' "$tmp/push.log" &&
+    hint=" Main changed a workflow during the run, so the branch looks like it reverts it. Start the run again."
+  grep -q 'non-fast-forward\|fetch first' "$tmp/push.log" &&
+    hint=" Someone pushed to the branch during the run. Start the run again."
+  report_failure "pushing \`$BRANCH\` failed.$hint"$'\n\n```\n'"$reason"$'\n```' nologs
   exit 1
 fi
 head_sha="$(git rev-parse refs/harness/result)"
