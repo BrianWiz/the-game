@@ -22,8 +22,8 @@ repo="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwn
 
 humans='map(select(.user.type != "Bot"))'
 
-gh api "repos/$repo/issues/$issue" --jq '
-  "## Request (issue #\(.number))\n\n**\(.title)**\n\n\(.body // "" | gsub("\r"; ""))\n\n_Requested by @\(.user.login)._\n"'
+gh api "repos/$repo/issues/$issue" | jq -r "$ISSUE_JQ"'
+  "## Request (issue #\(.number))\n\n**\(.title)**\n\n\(request_body)\n\n_Requested by \(requester)._\n"'
 
 comments="$(gh api --paginate "repos/$repo/issues/$issue/comments" |
   jq -rs "add // [] | $humans | map(\"**@\(.user.login)**: \(.body | gsub(\"\r\"; \"\"))\") | join(\"\n\n\")")"

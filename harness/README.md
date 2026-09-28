@@ -30,6 +30,11 @@ Only people with write access (or bots in `AGENT_TRUSTED_BOTS`) can start a run.
 
 The label is removed when the run ends, so adding it again starts another run.
 
+Runs are named `agent #<number> <mode> [<request_id>]`, so the Discord bot can match
+`workflow_run` events to the dispatch that caused them. Issues the bot opens end with a
+`Requested-by: <name> <discord:<id>>` trailer. `context.sh` and `publish.sh` credit that
+person instead of the bot, and only when the issue's author is a bot account.
+
 ## How a run is isolated
 
 - **gate** (GITHUB_TOKEN) checks the sender and the target, then comments "started".

@@ -55,5 +55,17 @@ filter_protected() {
   done
 }
 
+# jq definitions for an issue object. Issues opened by the Discord bot (author type Bot)
+# end with a "Requested-by: <name> <discord:<id>>" trailer naming the Discord requester;
+# a human-authored issue can't claim one.
+#   requester     "@login", or "<name> on Discord"
+#   request_body  the body without CRs or the trailer
+# shellcheck disable=SC2016,SC2034
+ISSUE_JQ='def body_lines: (.body // "" | gsub("\r"; "") | split("\n"));
+def discord_requester: if .user.type == "Bot" then ([body_lines[] | select(startswith("Requested-by: ")) | ltrimstr("Requested-by: ")] | last) else null end;
+def requester: discord_requester as $d | if $d then ($d | sub(" <discord:[0-9]+>$"; "")) + " on Discord" else "@" + .user.login end;
+def request_body: if discord_requester then [body_lines[] | select(startswith("Requested-by: ") | not)] | join("\n") | sub("\\s+$"; "") else (.body // "" | gsub("\r"; "")) end;
+'
+
 # valid_title "feat(game): add jump pads" -> exit 0
 valid_title() { [[ "$1" =~ $CC_TITLE_RE ]]; }

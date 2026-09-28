@@ -35,7 +35,10 @@ case "$*" in
     last="${*: -1}"
     { cat "${last#body=@}"; echo "----"; } >>"$FAKE_DIR/comments"
     ;;
-  "repos/o/r/issues/5") echo '{"title":"Jump pads","body":"Make\r\npads","user":{"login":"alice"}}' ;;
+  "repos/o/r/issues/5")
+    [[ -n "${FAKE_ISSUE:-}" ]] && echo "$FAKE_ISSUE" && exit 0
+    echo '{"title":"Jump pads","body":"Make\r\npads","user":{"login":"alice","type":"User"}}'
+    ;;
   *) echo "unexpected gh api $*" >&2; exit 1 ;;
 esac
 EOF
@@ -97,6 +100,14 @@ for want in "## Summary" "Boing." "Closes #5" "## Discord Request" "> **Jump pad
 done
 grep -q "pull/99" "$work/comments" || fail "no PR link comment on the issue"
 grep -q unlabeled "$work/labels" || fail "label not removed"
+
+echo "- a bot-opened issue credits the Discord requester from its trailer"
+scenario <<<'echo pad >game/pad.txt'
+FAKE_ISSUE='{"title":"Jump pads","body":"Make pads\n\nRequested-by: Alice <discord:42>","user":{"login":"tfpp-bot[bot]","type":"Bot"}}' publish
+[[ "$code" == 0 ]] || fail "exit $code: $(cat "$work/publish.log")"
+body="$(cat "$work/pr-body" 2>/dev/null)"
+[[ "$body" == *"requested by Alice on Discord"* ]] || fail "PR body lacks the Discord requester: $body"
+[[ "$body" != *"Requested-by:"* && "$body" != *"discord:42"* ]] || fail "trailer leaked into the PR body"
 
 echo "- failure: comments with the verify log and pushes nothing"
 scenario <<'EOF'
