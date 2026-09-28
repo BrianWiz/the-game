@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 GODOT="${GODOT:-godot}"
 GDTOOLKIT="${GDTOOLKIT:-uvx --from gdtoolkit==4.* }"
 SRC=(core ui world tests)
+[[ -d features ]] && SRC+=(features)
 
 step() { printf '\n==> %s\n' "$*"; }
 
