@@ -135,7 +135,7 @@ if [[ "$MODE" == implement ]]; then
   {
     summary_body
     printf '\nCloses #%s\n\n## Discord Request\n' "$ISSUE"
-    jq -r '"**\(.title)**\n\n\(.body // "" | gsub("\r"; ""))"' <<<"$issue_json" | sed 's/^/> /'
+    jq -r '"**\(.title)**" + (.body // "" | gsub("\r"; "") | if test("\\S") then "\n\n" + . else "" end)' <<<"$issue_json" | sed 's/^/> /'
     printf '\n– requested by @%s\n' "$(jq -r .user.login <<<"$issue_json")"
     warning
     footer
