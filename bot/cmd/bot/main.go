@@ -1,0 +1,248 @@
+// Command bot is the Discord bot: /feature and /revise start agent runs through the
+// GitHub App, and GitHub webhooks report their progress back to Discord threads.
+//
+// Configuration comes from the environment (see bot/README.md). Secrets are read from
+// files, never from variables.
+//
+//	bot              run the bot
+//	bot healthcheck  exit 0 if the local bot's /bot/health answers (for Docker)
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/disgoorg/snowflake/v2"
+
+	"github.com/tfpp/the-game/bot/internal/core"
+	"github.com/tfpp/the-game/bot/internal/discordbot"
+	"github.com/tfpp/the-game/bot/internal/github"
+	"github.com/tfpp/the-game/bot/internal/store"
+	"github.com/tfpp/the-game/bot/internal/webhook"
+)
+
+func main() {
+	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck())
+	}
+	if err := run(log); err != nil {
+		log.Error("fatal", "err", err)
+		os.Exit(1)
+	}
+}
+
+func env(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func envInt(key string, fallback int) (int, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", key, err)
+	}
+	return n, nil
+}
+
+func envID(key string, required bool) (snowflake.ID, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		if required {
+			return 0, fmt.Errorf("%s is required", key)
+		}
+		return 0, nil
+	}
+	id, err := snowflake.Parse(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", key, err)
+	}
+	return id, nil
+}
+
+// secret reads a required, trimmed secret file.
+func secret(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	s := strings.TrimSpace(string(b))
+	if s == "" {
+		return "", fmt.Errorf("%s is empty", path)
+	}
+	return s, nil
+}
+
+func run(log *slog.Logger) error {
+	addr := env("BOT_ADDR", ":8081")
+	repo := env("BOT_REPO", "tfpp/the-game")
+
+	guildID, err := envID("BOT_GUILD_ID", true)
+	if err != nil {
+		return err
+	}
+	roleID, err := envID("BOT_REQUESTER_ROLE_ID", true)
+	if err != nil {
+		return err
+	}
+	channelID, err := envID("BOT_FEATURE_CHANNEL_ID", false)
+	if err != nil {
+		return err
+	}
+	perUser, err := envInt("BOT_RUNS_PER_USER", 5)
+	if err != nil {
+		return err
+	}
+	maxActive, err := envInt("BOT_MAX_ACTIVE_RUNS", 2)
+	if err != nil {
+		return err
+	}
+	clientID := os.Getenv("BOT_GITHUB_CLIENT_ID")
+	if clientID == "" {
+		return errors.New("BOT_GITHUB_CLIENT_ID is required")
+	}
+
+	discordToken, err := secret(env("BOT_DISCORD_TOKEN_FILE", "/run/secrets/bot/discord-token"))
+	if err != nil {
+		return fmt.Errorf("discord token: %w", err)
+	}
+	keyPEM, err := secret(env("BOT_GITHUB_PRIVATE_KEY_FILE", "/run/secrets/bot/github-app.pem"))
+	if err != nil {
+		return fmt.Errorf("github app key: %w", err)
+	}
+	key, err := github.ParseKey([]byte(keyPEM))
+	if err != nil {
+		return fmt.Errorf("github app key: %w", err)
+	}
+	webhookSecret, err := secret(env("BOT_GITHUB_WEBHOOK_SECRET_FILE", "/run/secrets/bot/github-webhook-secret"))
+	if err != nil {
+		return fmt.Errorf("github webhook secret: %w", err)
+	}
+
+	st, err := store.Open(env("BOT_DB", "/data/bot.db"))
+	if err != nil {
+		return fmt.Errorf("database: %w", err)
+	}
+	defer st.Close()
+
+	gh := &github.App{ClientID: clientID, Key: key, Repo: repo, HTTP: &http.Client{Timeout: 30 * time.Second}}
+	if _, err := gh.Token(context.Background()); err != nil {
+		return fmt.Errorf("github app: %w", err)
+	}
+
+	dc, err := discordbot.New(discordbot.Config{
+		Token: discordToken, GuildID: guildID, RequesterRoleID: roleID,
+		FeatureChannelID: channelID, Logger: log,
+	})
+	if err != nil {
+		return fmt.Errorf("discord: %w", err)
+	}
+	svc := core.New(core.Config{
+		Repo:       repo,
+		Ref:        env("BOT_REF", "main"),
+		Workflow:   env("BOT_WORKFLOW", "agent.yml"),
+		CIWorkflow: env("BOT_CI_WORKFLOW", "game-ci.yml"),
+		Agent:      env("BOT_AGENT", "claude"),
+		Limits: store.Limits{
+			PerUser: perUser, Window: 24 * time.Hour,
+			MaxActive: maxActive, StaleAfter: 3 * time.Hour,
+		},
+		Logger: log,
+	}, st, gh, dc)
+	dc.Service = svc
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	hooks := &webhook.Handler{Secret: []byte(webhookSecret), Repo: repo, Service: svc, Store: st, Logger: log}
+	hooks.Start(ctx)
+	mux := http.NewServeMux()
+	mux.Handle("/bot/github", hooks)
+	mux.HandleFunc("GET /bot/health", func(w http.ResponseWriter, r *http.Request) {
+		ok := st.Ping(r.Context()) == nil
+		w.Header().Set("Content-Type", "application/json")
+		if !ok {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		json.NewEncoder(w).Encode(map[string]bool{"ok": ok, "discord": dc.Ready()})
+	})
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	if err := dc.Open(ctx); err != nil {
+		return fmt.Errorf("discord: %w", err)
+	}
+	defer dc.Close(context.Background())
+	go loop(ctx, log, "reconcile", 2*time.Minute, svc.Reconcile)
+	go loop(ctx, log, "purge", 24*time.Hour, func(ctx context.Context) error {
+		return st.Purge(ctx, time.Now(), 30*24*time.Hour)
+	})
+
+	errc := make(chan error, 1)
+	go func() {
+		log.Info("listening", "addr", addr, "repo", repo)
+		errc <- httpSrv.ListenAndServe()
+	}()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return httpSrv.Shutdown(shutdownCtx)
+}
+
+func loop(ctx context.Context, log *slog.Logger, name string, every time.Duration, f func(context.Context) error) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		if err := f(ctx); err != nil && ctx.Err() == nil {
+			log.Error(name+" failed", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func healthcheck() int {
+	port := env("BOT_ADDR", ":8081")
+	port = port[strings.LastIndexByte(port, ':')+1:]
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/bot/health")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, resp.Status)
+		return 1
+	}
+	return 0
+}
