@@ -25,7 +25,7 @@ Browser ─────────┘  wss://game.chrisbox.dev (Cloudflare Tunn
 | `bot/` | Discord bot, job tracking, merge coordinator | Go |
 | `api/` | Accounts (Discord OAuth plus email/password), sessions, game join tickets | Go |
 | `harness/` | Agent runner: adapters, prompts, `verify.sh` (the definition of done) | bash |
-| `.github/workflows/` | CI, Pages, server image, and later `agent.yml` | YAML |
+| `.github/workflows/` | CI, Pages, images, `agent.yml` | YAML |
 | `docs/` | This file and ADR-style notes | Markdown |
 
 `bot/` and `api/` are separate Go modules joined by a root `go.work`.
@@ -113,8 +113,8 @@ tunnel sends `game.chrisbox.dev/api/*` to the API and everything else to the gam
   Discord switch themselves off (and `/api/health` says so) until their secrets exist.
 - **Rate limits** (in memory, per IP from `CF-Connecting-IP` and per email or account)
   cover sign-up, login, reset, token redemption, name changes and tickets.
-- **Storage:** SQLite (WAL) in `/data/api.db`, shared with the bot later so Discord users
-  map to game accounts. Secrets in the database (sessions, email tokens, OAuth state,
+- **Storage:** SQLite (WAL) in `/data/api.db`. The bot keeps its own `bot.db`. Mapping
+  Discord users to game accounts will need a read-only view of this one. Secrets in the database (sessions, email tokens, OAuth state,
   login codes) are stored as SHA-256 hashes. Migrations are append-only and tracked
   with `PRAGMA user_version`.
 
@@ -182,11 +182,12 @@ client with a server configured (the web default) shows the login screen
 
 ## Agent pipeline
 
-1. `/feature <text>` in Discord *(v0.5)*. The bot checks the allowlist, rate limit and
-   concurrency cap, opens a thread, and creates a GitHub issue through the GitHub App.
-2. The bot dispatches `agent.yml`. Until the bot exists, a maintainer adds the `agent`
-   label or comments `/agent` (details in `harness/README.md`). `agent.yml` runs
-   three jobs:
+1. `/feature <text>` in Discord. The bot (`bot/`, details in `bot/README.md`) checks the
+   requester role, the per-user limit and the concurrency cap. It then creates a GitHub
+   issue through its GitHub App, ending in a `Requested-by:` trailer, and opens a thread.
+2. The bot dispatches `agent.yml` with a `request_id`, which the run name echoes. On
+   GitHub, a maintainer can also add the `agent` label or comment `/agent` (details in
+   `harness/README.md`). `agent.yml` runs three jobs:
    - **gate** (`harness/gate.sh`) accepts only senders with write access or bots listed
      in `AGENT_TRUSTED_BOTS`.
    - **agent** runs `harness/run.sh --agent claude|codex|pi --mode implement|revise|resolve-conflicts`
@@ -201,9 +202,11 @@ client with a server configured (the web default) shows the login screen
    - Without our own App, publish falls back to the installed Claude GitHub App's token,
      through the OIDC exchange `claude-code-action` uses.
 4. The run comments on the issue or PR with the PR link, or with the failing verify output.
-   *(v0.5: the bot relays this to the thread, with CI status and a preview link.)*
-5. `/agent <feedback>` on the PR (later, replies in the thread) starts a `revise` run.
-   `/agent resolve-conflicts` merges `main` in and resolves any conflicts.
+   The App's webhooks (`issue_comment`, `workflow_run`, `pull_request`) bring those
+   comments, CI results on the agent branch, and the merge or close back to the thread.
+   A reconcile loop polls while runs are active, in case a webhook is missed.
+5. `/revise <changes>` in the thread (or `/agent <feedback>` on the PR) starts a `revise`
+   run. `/agent resolve-conflicts` merges `main` in and resolves any conflicts.
 
 **Agents:** Claude Code runs on GitHub-hosted runners using `CLAUDE_CODE_OAUTH_TOKEN`
 (from `claude setup-token`). Codex and pi need persisted `auth.json` logins, so they run on
@@ -235,7 +238,7 @@ Approvals come from Discord, and a single coordinator applies them in order.
 | Web client | `pages.yml` (Godot web export) | GitHub Pages |
 | Dedicated server | `server-image.yml` → `ghcr.io/tfpp/the-game-server` | Homelab VM (docker compose, deployed from `~/code/homelab`) |
 | API | `api-image.yml` → `ghcr.io/tfpp/the-game-api` | Homelab VM, same compose project |
-| bot | Its own image (planned) | Homelab VM |
+| bot | `bot-image.yml` → `ghcr.io/tfpp/the-game-bot` | Homelab VM, same compose project; webhooks at `game.chrisbox.dev/bot/github` |
 
 The client and server must run the same code, and the join handshake enforces it (see
 "Version check"). Deploys are still manual; the plan is a server deploy triggered by the

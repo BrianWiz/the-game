@@ -8,7 +8,7 @@ b-hops), built by friends and LLM agents through Discord. See
 |---|---|
 | `game/` | Godot 4.7 client and dedicated server: room, Source movement, networking |
 | `harness/` | Agent runner and `agent.yml`: label an issue `agent` to get a PR ([setup](harness/README.md)) |
-| `bot/` | Go Discord bot (planned) |
+| `bot/` | Go Discord bot: `/feature` opens an issue and starts the agent, `/revise` changes its PR, progress lands in a thread ([setup](bot/README.md)) |
 | `api/` | Go accounts service: email/Discord sign-in, display names, join tickets |
 
 ## Quick start
