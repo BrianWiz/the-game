@@ -60,8 +60,8 @@ Environment variables; secrets are files.
 | `BOT_GUILD_ID` | required | The Discord server |
 | `BOT_REQUESTER_ROLE_ID` | required | Role allowed to use `/feature` and `/revise` |
 | `BOT_FEATURE_CHANNEL_ID` | any channel | Only channel `/feature` works in |
-| `BOT_RUNS_PER_USER` | `5` | Runs per user per 24 hours |
-| `BOT_MAX_ACTIVE_RUNS` | `2` | Concurrent runs |
+| `BOT_RUNS_PER_USER` | `5` | Runs per user per 24 hours; `0` for no limit |
+| `BOT_MAX_ACTIVE_RUNS` | `2` | Concurrent runs; `0` for no limit |
 | `BOT_REF`, `BOT_WORKFLOW`, `BOT_CI_WORKFLOW`, `BOT_AGENT` | `main`, `agent.yml`, `game-ci.yml`, `claude` | |
 
 ## Setup
