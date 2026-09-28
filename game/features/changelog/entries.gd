@@ -11,6 +11,22 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Casino material and model polish",
+		"summary":
+		(
+			"Rich carpet, teal wallpaper and walnut with physical materials,"
+			+ " detailed casino furniture, and realistic slot cabinets with rolling mechanical reels."
+		)
+	},
+	{
+		"title": "Open annex routes and desktop radar",
+		"summary":
+		(
+			"Explore all ten annex rooms through cleared passages and solid floors."
+			+ " Desktop players now have a top-right radar showing nearby rooms and players."
+		)
+	},
+	{
 		"title": "Adventure arcade room",
 		"summary":
 		(
