@@ -12,6 +12,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
 
 ## [edge]
 
+## [0.7.0](https://github.com/tfpp/the-game/releases/tag/v0.7.0) - 2026-09-28
+
 - Character Model (Esc menu) now picks a body, a head and a tail independently: a
   frog head or bird head, and a lizard, fin or fluffy tail, on any body (including
   the girl and penguin builds), so you can mix and match your own impossible
