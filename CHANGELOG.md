@@ -72,6 +72,7 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
 
 - Move the adventure cabinets into a dedicated room reached from the casino, unload emulators outside it, and pause shared progress while the room is empty.
 - Reduce arcade frame delivery delay and fix sound dropping out after delayed updates while preserving positional audio and the five-metre cutoff.
+- Show only the weekly Codex limit in Discord `/usage`, hiding the 5-hour window and per-model limits such as `gpt-reserve`.
 
 ## [0.6.0](https://github.com/tfpp/the-game/releases/tag/v0.6.0) - 2026-09-28
 
