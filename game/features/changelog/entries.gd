@@ -11,6 +11,11 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Ray Gun",
+		"summary":
+		"The Gun-O-Matic has a rare 1-in-30 chance to hand out the Ray Gun from Zombies.",
+	},
+	{
 		"title": "Remembered leaderboard",
 		"summary":
 		"Offline players stay ranked; signed-in scores survive reconnects and server restarts.",
