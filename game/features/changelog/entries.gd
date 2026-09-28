@@ -9,8 +9,9 @@ class_name ChangelogEntries
 ## description of what it does.
 const ENTRIES: Array[Dictionary] = [
 	{
-		"title": "Right-handed controls by default",
-		"summary": "New controls default to WASD + Space (DoctorDalek still starts left-handed).",
+		"title": "Update screen",
+		"summary":
+		"Web client shows an Updating… screen during a deploy instead of flashing reloads."
 	},
 	{
 		"title": "Combat",
