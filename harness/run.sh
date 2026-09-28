@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# Runs a coding agent on this repo until harness/verify.sh passes, then commits the result
+# and bundles the new commits for harness/publish.sh. It never pushes or talks to GitHub.
+#
+# Usage:
+#   harness/run.sh --agent claude|codex|pi --mode implement|revise|resolve-conflicts \
+#     --task FILE --branch NAME [--base main] [--out DIR] [--attempts 3]
+#
+#   implement          creates --branch from the base
+#   revise             checks out the existing --branch and adds commits
+#   resolve-conflicts  checks out --branch and merges the base into it
+#
+# Outputs in --out: result.json, summary.md, changes.bundle (on success), protected.txt,
+# prompt-N.md, agent-N.log and verify-N.log per attempt.
+# Env: HARNESS_MODEL, HARNESS_MAX_TURNS (passed to adapters), HARNESS_REMOTE (origin),
+#      HARNESS_VERIFY and HARNESS_ADAPTERS (overrides, for tests).
+# Exit: 0 for success or no_changes, 2 when the agent failed, 1 on harness errors.
+set -euo pipefail
+# shellcheck source=lib.sh source-path=SCRIPTDIR
+source "$(dirname "$0")/lib.sh"
+shopt -u patsub_replacement 2>/dev/null || true # keep '&' literal in ${x//a/b}
+
+agent="" mode="" task="" branch="" base="main" out="" attempts=3
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent) agent="$2" ;;
+    --mode) mode="$2" ;;
+    --task) task="$2" ;;
+    --branch) branch="$2" ;;
+    --base) base="$2" ;;
+    --out) out="$2" ;;
+    --attempts) attempts="$2" ;;
+    -h | --help)
+      sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) die "unknown argument: $1" ;;
+  esac
+  shift 2
+done
+
+adapters="${HARNESS_ADAPTERS:-$HARNESS_DIR/adapters}"
+verify="${HARNESS_VERIFY:-$HARNESS_DIR/verify.sh}"
+remote="${HARNESS_REMOTE:-origin}"
+
+[[ -x "$adapters/$agent.sh" ]] || die "unknown agent '$agent' (see $adapters)"
+case "$mode" in implement | revise | resolve-conflicts) ;; *) die "unknown mode '$mode'" ;; esac
+[[ -f "$task" ]] || die "--task file not found: $task"
+[[ -n "$branch" ]] || die "--branch is required"
+[[ "$attempts" =~ ^[1-9][0-9]*$ ]] || die "--attempts must be a positive number"
+
+task="$(cd "$(dirname "$task")" && pwd)/$(basename "$task")"
+out="${out:-$(mktemp -d)}"
+mkdir -p "$out"
+out="$(cd "$out" && pwd)"
+case "$out/" in "$REPO_ROOT"/*) die "--out must be outside the repo" ;; esac
+export HARNESS_OUT="$out"
+rm -f "$out"/{result.json,summary.md,last-message.md,changes.bundle,protected.txt}
+
+cd "$REPO_ROOT"
+[[ -z "$(git status --porcelain)" ]] || die "working tree is not clean"
+
+base_ref="$base"
+git rev-parse -q --verify "refs/remotes/$remote/$base" >/dev/null && base_ref="$remote/$base"
+git rev-parse -q --verify "$base_ref^{commit}" >/dev/null || die "base '$base' not found"
+
+# --- branch setup ----------------------------------------------------------------------
+merge_conflicts=0
+case "$mode" in
+  implement)
+    git rev-parse -q --verify "refs/heads/$branch" >/dev/null && die "branch $branch already exists"
+    git switch -q -c "$branch" "$base_ref"
+    ;;
+  revise | resolve-conflicts)
+    if git rev-parse -q --verify "refs/remotes/$remote/$branch" >/dev/null; then
+      git switch -q -C "$branch" "$remote/$branch"
+    else
+      git switch -q "$branch"
+    fi
+    ;;
+esac
+start_sha="$(git rev-parse HEAD)"
+log "mode=$mode agent=$agent branch=$branch base=$base_ref start=${start_sha:0:12}"
+
+if [[ "$mode" == resolve-conflicts ]]; then
+  if git merge -q --no-edit "$base_ref"; then
+    log "merged $base_ref cleanly"
+  elif [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+    merge_conflicts=1
+    log "merge conflicts: $(git diff --name-only --diff-filter=U | tr '\n' ' ')"
+  else
+    die "merging $base_ref failed without conflicts"
+  fi
+fi
+
+# --- prompt rendering ------------------------------------------------------------------
+render() { # render FILE [PROBLEM] -> stdout
+  local text
+  text="$(cat "$1")"
+  text="${text//\{\{BRANCH\}\}/$branch}"
+  text="${text//\{\{BASE\}\}/$base}"
+  text="${text//\{\{OUT\}\}/$out}"
+  text="${text//\{\{PROBLEM\}\}/${2:-}}"
+  text="${text//\{\{TASK\}\}/$(cat "$task")}"
+  printf '%s\n' "$text"
+}
+
+# Prints what is still wrong, or nothing when the work is done.
+check_work() {
+  local n="$1" unmerged markers
+  if [[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]]; then
+    unmerged="$(git diff --name-only --diff-filter=U)"
+    if [[ -n "$unmerged" ]]; then
+      printf 'These files still have merge conflicts:\n%s\n' "$unmerged"
+      return
+    fi
+  fi
+  markers="$(git diff "$start_sha" --name-only | while IFS= read -r f; do
+    [[ -f "$f" ]] && grep -lE '^(<<<<<<<|>>>>>>>) ' -- "$f" || true
+  done)"
+  if [[ -n "$markers" ]]; then
+    printf 'These files contain conflict markers:\n%s\n' "$markers"
+    return
+  fi
+  log "verify (attempt $n)"
+  if ! "$verify" >"$out/verify-$n.log" 2>&1; then
+    printf '`harness/verify.sh` failed. The end of its output:\n\n```\n%s\n```\n' \
+      "$(tail -n 150 "$out/verify-$n.log")"
+  fi
+}
+
+# --- agent loop ------------------------------------------------------------------------
+status="failed"
+attempt=0
+problem=""
+# A clean merge may need no agent at all.
+if [[ "$mode" == resolve-conflicts && "$merge_conflicts" == 0 ]]; then
+  problem="$(check_work 0)"
+  if [[ -z "$problem" ]]; then
+    status="success"
+    printf 'chore: merge %s into this branch\n\n## Summary\nMerged `%s` cleanly; verify passed.\n' \
+      "$base" "$base" >"$out/summary.md"
+  fi
+fi
+
+while [[ "$status" != success && "$attempt" -lt "$attempts" ]]; do
+  attempt=$((attempt + 1))
+  prompt="$out/prompt-$attempt.md"
+  if [[ "$attempt" == 1 ]]; then
+    {
+      render "$HARNESS_DIR/prompts/rules.md"
+      echo
+      render "$HARNESS_DIR/prompts/$mode.md"
+      if [[ -n "$problem" ]]; then # clean merge that fails verify
+        echo
+        render "$HARNESS_DIR/prompts/fix.md" "$problem"
+      fi
+    } >"$prompt"
+    cont=0
+  else
+    render "$HARNESS_DIR/prompts/fix.md" "$problem" >"$prompt"
+    cont=1
+  fi
+
+  log "agent attempt $attempt/$attempts"
+  if ! "$adapters/$agent.sh" "$prompt" "$out/agent-$attempt.log" "$cont"; then
+    log "agent exited with an error"
+    status="agent_error"
+    break
+  fi
+
+  # The agent declined (unclear or unsafe request) and left the branch untouched.
+  if [[ "$mode" != resolve-conflicts && "$(git rev-parse HEAD)" == "$start_sha" &&
+    -z "$(git status --porcelain)" ]] && grep -qi '^no changes' "$out/summary.md" 2>/dev/null; then
+    status="no_changes"
+    break
+  fi
+
+  problem="$(check_work "$attempt")"
+  if [[ -z "$problem" ]]; then
+    status="success"
+  else
+    log "not done: $(head -n 1 <<<"$problem")"
+  fi
+done
+
+# --- commit ----------------------------------------------------------------------------
+title=""
+[[ -f "$out/summary.md" ]] && title="$(head -n 1 "$out/summary.md" | sed -E 's/^[[:space:]#]+//; s/[[:space:]]+$//')"
+valid_title "$title" || title="${HARNESS_FALLBACK_TITLE:-chore: apply agent changes}"
+
+if [[ "$status" == success ]]; then
+  git add -A
+  if [[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]]; then
+    git commit -q --no-edit
+  elif ! git diff --cached --quiet; then
+    git commit -q -m "$title"
+  fi
+  if [[ "$(git rev-parse HEAD)" == "$start_sha" ]]; then
+    status="no_changes"
+  else
+    git bundle create -q "$out/changes.bundle" "refs/heads/$branch" "^$start_sha"
+  fi
+fi
+
+git diff --name-only "$base_ref...HEAD" | filter_protected >"$out/protected.txt" || true
+head_sha="$(git rev-parse HEAD)"
+
+jq -n \
+  --arg status "$status" --arg mode "$mode" --arg agent "$agent" \
+  --arg branch "$branch" --arg base "$base" --arg title "$title" \
+  --arg start_sha "$start_sha" --arg head_sha "$head_sha" --argjson attempts "$attempt" \
+  '{status: $status, mode: $mode, agent: $agent, branch: $branch, base: $base,
+    title: $title, start_sha: $start_sha, head_sha: $head_sha, attempts: $attempts}' \
+  >"$out/result.json"
+
+log "status=$status attempts=$attempt head=${head_sha:0:12} out=$out"
+[[ -s "$out/protected.txt" ]] && log "touched human-review paths: $(tr '\n' ' ' <"$out/protected.txt")"
+case "$status" in success | no_changes) exit 0 ;; *) exit 2 ;; esac
