@@ -12,6 +12,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
 
 ## [edge]
 
+## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
+
 - Stop the HUD version test from failing CI after every release.
 
 ## [0.7.0](https://github.com/tfpp/the-game/releases/tag/v0.7.0) - 2026-09-28
