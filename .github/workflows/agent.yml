@@ -163,7 +163,9 @@ jobs:
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
       - id: claude
         if: vars.AGENT_APP_CLIENT_ID == ''
-        run: echo "token=$(harness/claude-app-token.sh)" >> "$GITHUB_OUTPUT"
+        run: |
+          token="$(harness/claude-app-token.sh)"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
       - name: Publish
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || steps.claude.outputs.token }}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prints an installation token for the Claude GitHub App (claude[bot]), for repos without
+# Prints (only) an installation token for the Claude GitHub App (claude[bot]), for repos without
 # their own agent App. It trades the job's GitHub OIDC token (needs `id-token: write`) with
 # Anthropic, the same way anthropics/claude-code-action does. That exchange endpoint is
 # internal to the action and may change; prefer a dedicated App (see harness/README.md).
@@ -11,7 +11,7 @@ set -euo pipefail
 
 oidc="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
   "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=claude-code-github-action" | jq -r .value)"
-echo "::add-mask::$oidc"
+echo "::add-mask::$oidc" >&2
 
 resp="$(curl -sS -X POST -H "Authorization: Bearer $oidc" -w '\n%{http_code}' \
   https://api.anthropic.com/api/github/github-app-token-exchange)"
@@ -23,5 +23,5 @@ if [[ "$code" != 200 || -z "$token" ]]; then
   echo "Is the Claude GitHub App installed on this repo (https://github.com/apps/claude)?" >&2
   exit 1
 fi
-echo "::add-mask::$token"
+echo "::add-mask::$token" >&2 # workflow commands work on stderr too; stdout is the token
 printf '%s\n' "$token"
