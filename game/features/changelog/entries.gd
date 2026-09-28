@@ -9,6 +9,11 @@ class_name ChangelogEntries
 ## description of what it does.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Girl model option",
+		"summary":
+		"Pick a girl body model from the Esc menu's Character Model screen. Everyone sees your choice."
+	},
+	{
 		"title": "Ferry helm",
 		"summary":
 		"Taking the ferry's wheel now plants you at its old-timey helm instead of wandering off."
