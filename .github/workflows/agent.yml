@@ -6,6 +6,11 @@ name: agent
 #   agent    runs harness/run.sh with the model credential only; no write token
 #   publish  pushes the agent's commits and opens the PR with an App token, using the
 #            default branch's harness, never code from the agent's change
+# The run name ("agent #12 implement [bot-7]") lets the Discord bot match workflow_run
+# events to its jobs; request_id is its opaque ID for one dispatch.
+run-name: >-
+  agent #${{ inputs.number || github.event.issue.number || github.event.pull_request.number }}
+  ${{ inputs.mode || github.event_name }}${{ inputs.request_id && format(' [{0}]', inputs.request_id) || '' }}
 
 on:
   issues:
@@ -29,6 +34,10 @@ on:
         default: claude
       instructions:
         description: Extra instructions for the agent
+        required: false
+        default: ""
+      request_id:
+        description: Opaque ID from the Discord bot, echoed in the run name
         required: false
         default: ""
 
