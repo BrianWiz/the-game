@@ -22,6 +22,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
 - Build a furnished casino salon with generated burgundy carpet and felt, low-poly adult patrons, a bottle-lined bar, framed paintings, warm lighting and a walkable upstairs gallery; keep all eight slots accessible in one bank and include the new geometry on the desktop radar.
 
 - Remodel the card tables, chairs and salon patrons with curved upholstery, shaped supports and fitted anatomy; use a shared 128px surface atlas and texture previously plain model materials.
+- Fetch news headlines only on the server, every 15 minutes, and cache them there so
+  clients never call TheNewsAPI and restarts reuse recent headlines.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
