@@ -228,8 +228,10 @@ Approvals come from Discord, and a single coordinator applies them in order.
 - **Human-only paths:** PRs touching paths listed in `CODEOWNERS` (`.github/`, `harness/`,
   `bot/`, `api/`, core movement/net, `project.godot`) cannot be approved from Discord.
 
-**Conflict avoidance:** each feature lives in `game/features/<name>/` and self-registers
-(see `game/AGENTS.md`), so parallel PRs rarely touch the same files.
+**Conflict avoidance:** each feature lives in `game/features/<name>/` and self-registers:
+the game instances every `features/<name>/feature.tscn` under `Game/Features` at startup
+(`core/features/feature_loader.gd`, see `game/AGENTS.md`). Parallel PRs therefore don't
+touch shared scenes and rarely touch the same files.
 
 ## Deploy
 
