@@ -30,6 +30,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   and server restarts.
 - Roll the Ray Gun from Call of Duty Zombies at the Gun-O-Matic, with the same rare 1-in-30
   odds as the mystery box: green splashing bolts, 20-round magazine and 160 rounds total.
+- Box with your bare hands: click to jab, hold and release to power punch. Knock the
+  shooting gallery dummies into a ragdoll and power punch them across the floor.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
