@@ -9,6 +9,10 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
 
 ## [edge]
 
+- Add a day/night cycle: a full day repeats every 48 real-time minutes, with the sun
+  swinging across the sky, the skybox fading between day and night, and ambient
+  lighting dimming at night. It runs off the real-world clock, so it stays in sync
+  for everyone without any extra networking.
 - Rank connected players by wallet balance and show a swarm of flies over the poorest
   80% of them, rounded down; nobody is flagged with fewer than two connected wallets.
 - Frogs jump twice as high by default now, with a new "Frog jump height" slider in
