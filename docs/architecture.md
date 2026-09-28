@@ -226,7 +226,8 @@ Approvals come from Discord, and a single coordinator applies them in order.
 - **After every merge:** the coordinator re-checks the other open PRs and warns their
   threads early about new conflicts.
 - **Human-only paths:** PRs touching paths listed in `CODEOWNERS` (`.github/`, `harness/`,
-  `bot/`, `api/`, core movement/net, `project.godot`) cannot be approved from Discord.
+  `bot/`, `api/`, the core feature loader, movement and net, `main.tscn`, `project.godot`)
+  cannot be approved from Discord.
 
 **Conflict avoidance:** each feature lives in `game/features/<name>/` and self-registers:
 the game instances every `features/<name>/feature.tscn` under `Game/Features` at startup

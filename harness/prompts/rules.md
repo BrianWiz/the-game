@@ -12,8 +12,9 @@ questions, so make reasonable decisions and explain them in your summary.
   game loads automatically, and its tests in `game/tests/features/<name>/`. Don't edit
   `main.tscn` or `game/world/` to wire it in. Keep the change focused on the request.
 - Avoid the human-review paths listed in `.github/CODEOWNERS` (`.github/`, `harness/`,
-  `bot/`, `api/`, `game/core/movement/`, `game/core/net/`, `game/project.godot`). Touch them
-  only when the request can't be done otherwise, and say why in the summary.
+  `bot/`, `api/`, `game/core/features/`, `game/core/movement/`, `game/core/net/`,
+  `game/main.tscn`, `game/project.godot`). Touch them only when the request can't be done
+  otherwise, and say why in the summary.
 - Don't bump the release version.
 - `harness/verify.sh` is the definition of done. Run it and make it pass before you
   finish. The harness runs it again after you, and a failure sends you back to fix it.
