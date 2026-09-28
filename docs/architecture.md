@@ -180,16 +180,30 @@ client with a server configured (the web default) shows the login screen
 (`ui/login/`) over the offline room. `--api=` / `?api=` override the API URL
 (`game/network/api_url`).
 
-## Agent pipeline (planned)
+## Agent pipeline
 
-1. `/feature <text>` in Discord. The bot checks the allowlist, rate limit and concurrency
-   cap, opens a thread, and creates a GitHub issue through the GitHub App.
-2. The bot dispatches `agent.yml`, which only accepts dispatches from the bot App.
-   The workflow runs `harness/run.sh --agent claude|codex|pi --mode implement|revise|resolve-conflicts`.
-3. The agent works on `agent/<issue>-<slug>`, must make `harness/verify.sh` pass, and opens
-   a PR using an App token (so CI triggers).
-4. The Action reports back to the thread with the PR link, CI status, and a preview link.
-5. Replies in the thread become PR comments and start `revise` runs.
+1. `/feature <text>` in Discord *(v0.5)*. The bot checks the allowlist, rate limit and
+   concurrency cap, opens a thread, and creates a GitHub issue through the GitHub App.
+2. The bot dispatches `agent.yml`. Until the bot exists, a maintainer adds the `agent`
+   label or comments `/agent` (details in `harness/README.md`). `agent.yml` runs
+   three jobs:
+   - **gate** (`harness/gate.sh`) accepts only senders with write access or bots listed
+     in `AGENT_TRUSTED_BOTS`.
+   - **agent** runs `harness/run.sh --agent claude|codex|pi --mode implement|revise|resolve-conflicts`
+     with the model credential and no write token.
+   - **publish** (`harness/publish.sh`) runs from the default branch with an App token.
+3. The agent works on `agent/<issue>-<slug>`. `run.sh` re-runs `harness/verify.sh` after
+   it and sends failures back (3 attempts by default), then commits and bundles the result.
+   `publish.sh` pushes the bundle without force and opens the PR with the App token, so CI
+   triggers.
+   - The App has no Workflows permission, so agents can't change `.github/workflows/`.
+   - PRs touching `CODEOWNERS` paths are flagged.
+   - Without our own App, publish falls back to the installed Claude GitHub App's token,
+     through the OIDC exchange `claude-code-action` uses.
+4. The run comments on the issue or PR with the PR link, or with the failing verify output.
+   *(v0.5: the bot relays this to the thread, with CI status and a preview link.)*
+5. `/agent <feedback>` on the PR (later, replies in the thread) starts a `revise` run.
+   `/agent resolve-conflicts` merges `main` in and resolves any conflicts.
 
 **Agents:** Claude Code runs on GitHub-hosted runners using `CLAUDE_CODE_OAUTH_TOKEN`
 (from `claude setup-token`). Codex and pi need persisted `auth.json` logins, so they run on
@@ -234,7 +248,7 @@ same merge that updates Pages.
 2. **v0.2:** deploy the server to the homelab behind NPM, and have the web client default
    to `wss://game.chrisbox.dev`.
 3. **v0.3:** `api/` accounts (Discord plus email/password) and join tickets.
-4. **v0.4:** `harness/` plus `agent.yml` (Claude), triggered by label/dispatch.
+4. **v0.4:** `harness/` plus `agent.yml` (Claude), triggered by label/comment/dispatch.
 5. **v0.5:** `bot/` MVP (`/feature`, threads, status), then revise loops.
 6. **v0.6:** Discord approvals plus the merge coordinator; later, a homelab runner with
    Codex/pi.

@@ -7,7 +7,7 @@ b-hops), built by friends and LLM agents through Discord. See
 | Dir | Status |
 |---|---|
 | `game/` | Godot 4.7 client and dedicated server: room, Source movement, networking |
-| `harness/` | `verify.sh` (agent definition of done); runner is planned |
+| `harness/` | Agent runner and `agent.yml`: label an issue `agent` to get a PR ([setup](harness/README.md)) |
 | `bot/` | Go Discord bot (planned) |
 | `api/` | Go accounts service: email/Discord sign-in, display names, join tickets |
 
