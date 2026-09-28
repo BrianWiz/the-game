@@ -1,0 +1,185 @@
+name: agent
+
+# Runs a coding agent on an issue or an agent PR. See harness/README.md for triggers and
+# setup. Three jobs keep credentials apart:
+#   gate     decides whether to run (GITHUB_TOKEN, comments "started")
+#   agent    runs harness/run.sh with the model credential only; no write token
+#   publish  pushes the agent's commits and opens the PR with an App token, using the
+#            default branch's harness, never code from the agent's change
+
+on:
+  issues:
+    types: [labeled]
+  pull_request_target:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      number:
+        description: Issue number (implement) or agent PR number (revise, resolve-conflicts)
+        required: true
+      mode:
+        type: choice
+        options: [implement, revise, resolve-conflicts]
+        default: implement
+      agent:
+        type: choice
+        options: [claude]
+        default: claude
+      instructions:
+        description: Extra instructions for the agent
+        required: false
+        default: ""
+
+permissions: {}
+
+jobs:
+  gate:
+    if: >-
+      (github.event_name == 'issues' && github.event.label.name == 'agent') ||
+      (github.event_name == 'pull_request_target' && github.event.label.name == 'agent') ||
+      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/agent')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      ok: ${{ steps.gate.outputs.ok }}
+      mode: ${{ steps.gate.outputs.mode }}
+      agent: ${{ steps.gate.outputs.agent }}
+      issue: ${{ steps.gate.outputs.issue }}
+      pr: ${{ steps.gate.outputs.pr }}
+      branch: ${{ steps.gate.outputs.branch }}
+      target: ${{ steps.gate.outputs.target }}
+      instructions: ${{ steps.gate.outputs.instructions }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            harness
+            .github
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENT_TRUSTED_BOTS: ${{ vars.AGENT_TRUSTED_BOTS }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: harness/gate.sh
+
+  agent:
+    needs: gate
+    if: needs.gate.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: agent-run-${{ needs.gate.outputs.issue }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+      - name: Install Claude Code
+        if: needs.gate.outputs.agent == 'claude'
+        run: curl -fsSL https://claude.ai/install.sh | bash
+      - name: Configure git
+        env:
+          NAME: ${{ vars.AGENT_GIT_NAME || 'claude[bot]' }}
+          EMAIL: ${{ vars.AGENT_GIT_EMAIL || '209825114+claude[bot]@users.noreply.github.com' }}
+        run: |
+          git config --global user.name "$NAME"
+          git config --global user.email "$EMAIL"
+      - name: Gather context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.gate.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
+          INSTRUCTIONS: ${{ needs.gate.outputs.instructions }}
+        run: |
+          printf '%s' "$INSTRUCTIONS" > "$RUNNER_TEMP/instructions.md"
+          args=(--issue "$ISSUE" --instructions-file "$RUNNER_TEMP/instructions.md")
+          [[ -n "$PR" ]] && args+=(--pr "$PR")
+          harness/context.sh "${args[@]}" > "$RUNNER_TEMP/task.md"
+          cat "$RUNNER_TEMP/task.md"
+      - name: Run agent
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          HARNESS_MODEL: ${{ vars.AGENT_MODEL }}
+          HARNESS_MAX_TURNS: ${{ vars.AGENT_MAX_TURNS }}
+          AGENT: ${{ needs.gate.outputs.agent }}
+          MODE: ${{ needs.gate.outputs.mode }}
+          BRANCH: ${{ needs.gate.outputs.branch }}
+          ATTEMPTS: ${{ vars.AGENT_ATTEMPTS || 3 }}
+        run: |
+          harness/run.sh --agent "$AGENT" --mode "$MODE" --branch "$BRANCH" \
+            --task "$RUNNER_TEMP/task.md" --out "$RUNNER_TEMP/harness-out" --attempts "$ATTEMPTS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: harness-out
+          path: ${{ runner.temp }}/harness-out
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    needs: [gate, agent]
+    if: always() && needs.gate.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: agent-publish-${{ needs.gate.outputs.issue }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # only for the Claude app token exchange
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: harness-out
+          path: ${{ runner.temp }}/harness-out
+      # Our own App when configured, otherwise the Claude GitHub App (see harness/README.md).
+      - id: app
+        if: vars.AGENT_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+      - id: claude
+        if: vars.AGENT_APP_CLIENT_ID == ''
+        run: echo "token=$(harness/claude-app-token.sh)" >> "$GITHUB_OUTPUT"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || steps.claude.outputs.token }}
+          OUT: ${{ runner.temp }}/harness-out
+          MODE: ${{ needs.gate.outputs.mode }}
+          AGENT: ${{ needs.gate.outputs.agent }}
+          ISSUE: ${{ needs.gate.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
+          BRANCH: ${{ needs.gate.outputs.branch }}
+          TARGET: ${{ needs.gate.outputs.target }}
+          BASE: ${{ github.event.repository.default_branch }}
+          AGENT_JOB_RESULT: ${{ needs.agent.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: harness/publish.sh
+      - name: Revoke Claude app token
+        if: always() && steps.claude.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.claude.outputs.token }}
+        run: gh api -X DELETE installation/token || true
