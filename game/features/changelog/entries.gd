@@ -11,6 +11,11 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Gnome express tunnels",
+		"summary":
+		"Use any gnome hole to enter the tunnels, run at 4x speed and exit at any other hole."
+	},
+	{
 		"title": "Flashlights",
 		"summary":
 		"Press F to toggle a flashlight that follows your aim and lights the way for everyone."
