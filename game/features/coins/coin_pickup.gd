@@ -1,14 +1,13 @@
-class_name SmecklePickup
+class_name CoinPickup
 extends StaticBody3D
-## A coin that grants the collecting player a random handful of Smeckles, then
+## A coin that pays the collecting player $10 into their persisted wallet — the
+## same server-authoritative money the slot machine pays out of — then
 ## disappears until a cooldown elapses. Only the server decides the reward and
 ## reopens the pickup; `available` is the one replicated flag, so every peer shows
 ## or hides the same coin and clients can't collect twice by racing the cooldown.
 
 const PICKUP_RANGE := 2.0
 const COOLDOWN_S := 20.0
-const REWARD_MIN := 3
-const REWARD_MAX := 12
 const SPIN_RATE := 1.5
 
 @export var available := true
@@ -31,7 +30,7 @@ func _process(delta: float) -> void:
 
 
 func interaction_text() -> String:
-	return "Pick up Smeckles"
+	return "Pick up $10"
 
 
 func can_use(player: Player) -> bool:
@@ -53,11 +52,13 @@ func request_collect() -> void:
 	var player := _player_for_peer(peer_id)
 	if player == null or not can_use(player):
 		return
+	var wallet := get_tree().get_first_node_in_group(&"player_money") as PlayerMoney
+	if wallet == null:
+		return
 	available = false
 	_timer.start()
-	var smeckles := get_parent() as Smeckles
-	if smeckles != null:
-		smeckles.grant(peer_id, randi_range(REWARD_MIN, REWARD_MAX))
+	var id := Crypto.new().generate_random_bytes(32).hex_encode()
+	await wallet.credit_coin(peer_id, id)
 
 
 func _on_cooldown_finished() -> void:

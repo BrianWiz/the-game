@@ -1,17 +1,18 @@
 extends GutTest
 
-const PickupScene := preload("res://features/smeckles/pickup.tscn")
+const PickupScene := preload("res://features/coins/pickup.tscn")
 const PlayerScene := preload("res://core/player/player.tscn")
 
-var _smeckles: Smeckles
-var _pickup: SmecklePickup
+var _wallet: PlayerMoney
+var _pickup: CoinPickup
 
 
 func before_each() -> void:
-	_smeckles = Smeckles.new()
-	add_child_autofree(_smeckles)
-	_pickup = PickupScene.instantiate() as SmecklePickup
-	_smeckles.add_child(_pickup)
+	_wallet = PlayerMoney.new()
+	add_child_autofree(_wallet)
+	_wallet.set_process(false)
+	_pickup = PickupScene.instantiate() as CoinPickup
+	add_child_autofree(_pickup)
 	_pickup.set_process(false)
 
 
@@ -40,30 +41,30 @@ func test_unavailable_pickup_cannot_be_used() -> void:
 	assert_false(_pickup.can_use(player))
 
 
-func test_collecting_grants_a_reward_and_disables_the_pickup() -> void:
+func test_collecting_adds_ten_dollars_and_disables_the_pickup() -> void:
 	_player_at(Vector3.ZERO)
-	_pickup.request_collect()
+	await _pickup.request_collect()
 	assert_false(_pickup.available)
-	assert_between(_smeckles.balance_for(1), SmecklePickup.REWARD_MIN, SmecklePickup.REWARD_MAX)
+	assert_eq(int(_wallet.balances[1]), 3000)
 
 
 func test_unknown_player_cannot_collect() -> void:
-	_pickup.request_collect()
+	await _pickup.request_collect()
 	assert_true(_pickup.available)
-	assert_eq(_smeckles.balance_for(1), 0)
+	assert_false(_wallet.balances.has(1))
 
 
 func test_second_collect_is_ignored_until_cooldown() -> void:
 	_player_at(Vector3.ZERO)
-	_pickup.request_collect()
-	var first_balance := _smeckles.balance_for(1)
-	_pickup.request_collect()
-	assert_eq(_smeckles.balance_for(1), first_balance)
+	await _pickup.request_collect()
+	var first_balance := int(_wallet.balances[1])
+	await _pickup.request_collect()
+	assert_eq(int(_wallet.balances[1]), first_balance)
 
 
 func test_cooldown_reopens_the_pickup() -> void:
 	_player_at(Vector3.ZERO)
-	_pickup.request_collect()
+	await _pickup.request_collect()
 	assert_false(_pickup.available)
 	_pickup._on_cooldown_finished()
 	assert_true(_pickup.available)

@@ -3,6 +3,8 @@ extends Node
 ## Server-owned wallets. Online balances live in the accounts API's SQLite DB;
 ## offline/dev wallets are temporary and never cross into authenticated accounts.
 
+const COIN_CREDIT_CENTS := 1000
+
 @export var balances: Dictionary = {}
 var _busy: Dictionary = {}
 var _generation := 0
@@ -120,6 +122,32 @@ func spin(peer: int, id: String) -> Dictionary:
 			_unresolved[account] = id
 		result = await _request(account, "spin", str(_unresolved[account]))
 		if generation == _generation and (result.has("balance") or result.has("rejected")):
+			_unresolved.erase(account)
+	if generation != _generation:
+		return {"error": "Session changed"}
+	if _account(peer) == account and result.has("balance"):
+		_set_balance(peer, int(result["balance"]))
+	_busy.erase(peer)
+	return result
+
+
+## Server-only: pays a fixed $10 reward for a map coin pickup into `peer`'s wallet,
+## the same persisted, idempotent-retry path `spin()` uses for paid spins.
+func credit_coin(peer: int, id: String) -> Dictionary:
+	if not multiplayer.is_server() or _busy.has(peer):
+		return {"error": "Wallet loading — try again"}
+	_busy[peer] = true
+	var generation := _generation
+	var account := _account(peer)
+	var result: Dictionary
+	if _temporary() and account <= 0:
+		var balance := int(balances.get(peer, 2000)) + COIN_CREDIT_CENTS
+		result = {"balance": balance}
+	else:
+		if not _unresolved.has(account):
+			_unresolved[account] = id
+		result = await _request(account, "credit", str(_unresolved[account]))
+		if generation == _generation and result.has("balance"):
 			_unresolved.erase(account)
 	if generation != _generation:
 		return {"error": "Session changed"}

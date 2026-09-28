@@ -29,8 +29,9 @@ The game server uses `Network.resolve_api_url()` (the normal API URL), or pass
 `--api=http://api:8080/api` for a direct internal connection. The endpoint is
 `POST /api/game/money`, authenticated with `X-Game-Signature`: hex HMAC-SHA256 of
 `game-money-v1\n` plus the exact JSON body, using the ticket key. Bodies include
-`account_id`, `action` (`balance` or `spin`), `id` (32 random bytes as hex for spins),
-and `timestamp` (Unix seconds, within 60 seconds of the API clock).
+`account_id`, `action` (`balance`, `spin` or `credit`), `id` (32 random bytes as hex
+for spins and credits), and `timestamp` (Unix seconds, within 60 seconds of the API
+clock).
 
 For spins, the API generates independent random reels and transactionally records
 the result, deducts $1, and pays the prize. A unique operation ID makes retries
@@ -38,6 +39,10 @@ idempotent. Insufficient funds reject the entire spin, including a would-be win.
 The game remembers unresolved operation IDs so retrying after a lost response
 recovers the result without charging again. A spin's recorded balance reflects its
 settlement; the next heartbeat refreshes any income awarded since then.
+
+Coins scattered around the map (`features/coins/`) pay a flat $10 the same way: the
+server calls the `credit` action with a fresh operation ID, the API adds the reward
+and records the ID so a retried request doesn't pay twice.
 
 Validation: Go store/API tests cover persistence, concurrent spending, replay,
 authentication, income and exact expected payouts. GUT covers offline wallets,

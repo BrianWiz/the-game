@@ -49,6 +49,23 @@ func (s *Server) gameMoney(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]int64{"balance": balance})
 		return
 	}
+	if req.Action == "credit" {
+		if len(req.ID) != 64 {
+			writeError(w, 400, "bad_request", "invalid credit")
+			return
+		}
+		balance, err := s.store.CreditCoin(r.Context(), req.AccountID, req.ID)
+		if errors.Is(err, store.ErrCreditConflict) {
+			writeError(w, 409, "credit_conflict", "invalid credit")
+			return
+		}
+		if err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+		writeJSON(w, 200, map[string]int64{"balance": balance})
+		return
+	}
 	if req.Action != "spin" || len(req.ID) != 64 {
 		writeError(w, 400, "bad_request", "invalid spin")
 		return

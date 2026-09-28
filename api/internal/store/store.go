@@ -119,6 +119,11 @@ var migrations = []string{
 		payout INTEGER NOT NULL,
 		balance INTEGER NOT NULL
 	);`,
+	`CREATE TABLE coin_credits (
+		id TEXT PRIMARY KEY,
+		account_id INTEGER NOT NULL REFERENCES accounts(id),
+		balance INTEGER NOT NULL
+	);`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

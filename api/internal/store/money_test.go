@@ -55,6 +55,41 @@ func TestWalletPersistenceAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestCoinCreditIsIdempotentAndPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "coin.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	a, err := s.CreateEmailAccount(ctx, "coin@example.com", "hash", "Alice", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	balance, err := s.CreditCoin(ctx, a.ID, "one")
+	if err != nil || balance != 3000 {
+		t.Fatalf("credit: %d %v", balance, err)
+	}
+	s.Close()
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	replay, err := s.CreditCoin(ctx, a.ID, "one")
+	if err != nil || replay != 3000 {
+		t.Fatalf("retry paid again: %d %v", replay, err)
+	}
+	balance, _ = s.Money(ctx, a.ID)
+	if balance != 3000 {
+		t.Fatal(balance)
+	}
+	b, _ := s.CreateEmailAccount(ctx, "coin-b@example.com", "hash", "Bob", time.Now())
+	if _, err = s.CreditCoin(ctx, b.ID, "one"); !errors.Is(err, ErrCreditConflict) {
+		t.Fatal(err)
+	}
+}
+
 func TestConcurrentSpinsCannotOverdraw(t *testing.T) {
 	s, err := Open(":memory:")
 	if err != nil {
