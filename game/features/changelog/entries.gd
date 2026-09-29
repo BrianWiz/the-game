@@ -15,6 +15,11 @@ const ENTRIES: Array[Dictionary] = [
 		"summary": "Explore the hotels, sewers and atrium with reliable lighting, even at night.",
 	},
 	{
+		"title": "Room rendering",
+		"summary":
+		"The server tracks your room so distant districts stop drawing while you explore indoors.",
+	},
+	{
 		"title": "Atrium hotel",
 		"summary":
 		"Visit the four-floor atrium wing from the classic hotel, with gentle ramps to guest rooms.",
