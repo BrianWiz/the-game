@@ -40,6 +40,9 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   to 5) that gives your losing slot spins another roll until you win.
 - Enter the Adventure Arcade without a long freeze: cabinets now show an attract screen
   and only load and start their game when someone uses them.
+- Find gnome holes as doggy doors on the outer walls: gnomes now come out one by one,
+  wander their own routes around players, NPCs and frogs, and can be killed like frogs
+  until their burrow next comes out.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
