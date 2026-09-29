@@ -119,6 +119,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   of lights, and their shaders load with the game.
 - Celebrate winning slot machine spins with fireworks over the cabinet and gold coins
   spilling from the tray; both grow with the size of the prize.
+- Visit İstanbul Kebab directly ahead of casino spawn for animated staff, a rotating döner
+  spit and free kebabs you can hold, share and eat.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
