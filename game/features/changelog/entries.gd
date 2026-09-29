@@ -11,6 +11,10 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Casino patrons",
+		"summary": "Gamblers stroll the casino floor; punch them silly and they ragdoll.",
+	},
+	{
 		"title": "Steady casino textures",
 		"summary": "Props no longer slide as you turn, and guns and gnomes show their colours.",
 	},
