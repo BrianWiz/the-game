@@ -11,6 +11,10 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Six little secrets",
+		"summary": "Explore the annex wings to discover six hidden joke plaques.",
+	},
+	{
 		"title": "Touch fire button",
 		"summary": "Tap FIRE on a phone or pull a controller's right trigger to attack.",
 	},

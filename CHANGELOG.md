@@ -108,6 +108,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   near him for $10 of subway fare, once an hour.
 - Add a FIRE button to the touch controls and let the controller's right trigger attack
   and shoot, alongside the existing right bumper.
+- Explore the annex wings to find six hidden joke plaques with no extra controls.
+
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
