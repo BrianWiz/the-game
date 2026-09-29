@@ -36,6 +36,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   gnomes and other plain-coloured props from rendering almost black.
 - Add four walking casino patrons to the gaming floor: punch them to stagger them, knock
   them out into a limp ragdoll, and watch them get back up and carry on.
+- Pray at the Kaaba with Use: a chant plays and each prayer adds a stacking blessing (up
+  to 5) that gives your losing slot spins another roll until you win.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
