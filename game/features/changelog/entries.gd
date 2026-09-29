@@ -11,6 +11,10 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Quest 3 browser VR",
+		"summary": "Enter VR from Quest / WebXR in the menu to explore with Touch controllers.",
+	},
+	{
 		"title": "Shootable salon NPCs",
 		"summary":
 		"Shoot salon guests, dealers and the apartment clerk; they return after six seconds.",
