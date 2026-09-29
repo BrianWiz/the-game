@@ -11,6 +11,10 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Full mobile rendering",
+		"summary": "Phones now use desktop rendering settings without extra graphics limits.",
+	},
+	{
 		"title": "Food court",
 		"summary": "Walk to the new south-wing food court for kebabs and booths you can sit in.",
 	},
