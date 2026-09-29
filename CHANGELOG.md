@@ -109,6 +109,7 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
 - Add a FIRE button to the touch controls and let the controller's right trigger attack
   and shoot, alongside the existing right bumper.
 - Explore the annex wings to find six hidden joke plaques with no extra controls.
+- Meet Donald Trump following the mayor by the slots; use E to pay him $100.
 
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
