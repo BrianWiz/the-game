@@ -143,6 +143,8 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   floor, and distant door labels no longer float on their own on phones and touch screens.
 - Show what NPCs say to you as movie-style subtitles at the bottom of the screen instead of
   a floating speech bubble.
+- Bribe Donald Trump for slightly better slot machine luck. Each bribe doubles in price, up
+  to five, and he promises to remodel part of the casino with one of 1,000 quips.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 

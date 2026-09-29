@@ -11,6 +11,10 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Trump bribes",
+		"summary": "Bribe Donald Trump for slightly better slot luck; each bribe costs more.",
+	},
+	{
 		"title": "NPC subtitles",
 		"summary": "NPC dialogue now shows as movie subtitles at the bottom of the screen.",
 	},
