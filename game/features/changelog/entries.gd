@@ -11,6 +11,10 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Steady casino textures",
+		"summary": "Props no longer slide as you turn, and guns and gnomes show their colours.",
+	},
+	{
 		"title": "Turkey Puncher computers",
 		"summary": "Click arcade computer screens to play Super Turbo Turkey Puncher 3.",
 	},

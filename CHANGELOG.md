@@ -6,8 +6,6 @@ Every notable change, newest first. `edge` is what's on `main` but not released 
 a bullet to the end of `## [edge]`:** imperative, one line per change where possible, no
 version. Releases are cut by hand (the `release` workflow): it moves `edge` into a section
 for the new version. See "Versioning" in [docs/architecture.md](docs/architecture.md).
-- Play Super Turbo Turkey Puncher 3 on two mouse-operated computers in the Adventure
-  Arcade, with shared screens, timed rounds and cabinet high scores.
 
 ## [edge]
 
@@ -32,6 +30,10 @@ for the new version. See "Versioning" in [docs/architecture.md](docs/architectur
   and server restarts.
 - Press ~ for a Source-style settings console with autocomplete and command history;
   use sv_cheats 1 to unlock noclip and sv_cheats 0 to disable it for everyone.
+- Play Super Turbo Turkey Puncher 3 on two mouse-operated computers in the Adventure
+  Arcade, with shared screens, timed rounds and cabinet high scores.
+- Stop casino benches and props from sliding when you turn the camera, and stop guns,
+  gnomes and other plain-coloured props from rendering almost black.
 
 ## [0.7.1](https://github.com/tfpp/the-game/releases/tag/v0.7.1) - 2026-09-28
 
