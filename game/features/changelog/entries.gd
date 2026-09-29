@@ -11,9 +11,14 @@ class_name ChangelogEntries
 ## Don't add a version; the build works it out from the release tags.
 const ENTRIES: Array[Dictionary] = [
 	{
+		"title": "Lily Apartments",
+		"summary":
+		"Claim a free room at the front desk and ride the elevator to expanding ten-unit floors.",
+	},
+	{
 		"title": "Desktop app installer",
 		"summary":
-		"Install the desktop app with one curl command on macOS, Linux or Windows Git Bash."
+		"Install the desktop app with one curl command on macOS, Linux or Windows Git Bash.",
 	},
 	{
 		"title": "Desktop app",
@@ -26,19 +31,19 @@ const ENTRIES: Array[Dictionary] = [
 	{
 		"title": "Baked hotel lighting and branching wings",
 		"summary":
-		"Explore six generated rooms with branching halls, soft lamp shadows and baked bounced light."
+		"Explore six generated rooms with branching halls, soft lamp shadows and baked bounced light.",
 	},
 	{
 		"title": "Procedural floor plans on radar",
-		"summary": "Generated rooms and hallways now appear on the radar as you explore."
+		"summary": "Generated rooms and hallways now appear on the radar as you explore.",
 	},
 	{
 		"title": "The hotel wing",
-		"summary": "Visit the hotel wing from the south lobby; use its casino door to return."
+		"summary": "Visit the hotel wing from the south lobby; use its casino door to return.",
 	},
 	{
 		"title": "Sky through procedural windows",
-		"summary": "Clear glazing and a clouded sky give generated rooms a view outside."
+		"summary": "Clear glazing and a clouded sky give generated rooms a view outside.",
 	},
 	{
 		"title": "Procedural room authoring",
@@ -46,7 +51,7 @@ const ENTRIES: Array[Dictionary] = [
 		(
 			"Build textured rooms with mouldings, eight-sided pillars, "
 			+ "framed doors and windows from blueprints."
-		)
+		),
 	},
 	{
 		"title": "Doggy-door gnomes",
