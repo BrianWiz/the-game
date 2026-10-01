@@ -253,7 +253,11 @@ func _toss(def: ItemDefinition, distance: float) -> void:
 		return
 	net_item_id = ""
 	var from := (
-		HeldItemPose.world_grip(player.net_position, player.net_yaw, player.net_pitch).origin
+		HeldItemPose
+		. world_grip(
+			player.net_position, player.net_yaw, player.net_pitch, PlayerHeight.eye_scale(player)
+		)
+		. origin
 	)
 	var direction := ThrowMath.aim_direction(player.net_yaw, player.net_pitch)
 	var to := _landing_point(from, direction, distance)
@@ -358,7 +362,11 @@ func drop_inventory_item(item_id: String) -> bool:
 	if player == null or holdables == null:
 		return false
 	var from := (
-		HeldItemPose.world_grip(player.net_position, player.net_yaw, player.net_pitch).origin
+		HeldItemPose
+		. world_grip(
+			player.net_position, player.net_yaw, player.net_pitch, PlayerHeight.eye_scale(player)
+		)
+		. origin
 	)
 	var direction := ThrowMath.aim_direction(player.net_yaw, player.net_pitch)
 	holdables.call(

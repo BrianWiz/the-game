@@ -76,8 +76,9 @@ func pose_for_player(player: Player, support: Node3D, skin: Color) -> void:
 	var shoulders: Transform3D
 	if first_person:
 		shoulders = (player.get_node("Camera") as Node3D).global_transform
-		var drop := -0.36 * HeldItemPose.avatar_height_scale(body)
-		shoulders.origin += shoulders.basis * Vector3(0, drop, 0.10)
+		var factor := HeldItemPose.avatar_height_scale(body)
+		shoulders.basis = shoulders.basis.scaled(Vector3.ONE * factor)
+		shoulders.origin += shoulders.basis * Vector3(0, -0.36, 0.10)
 	else:
 		var yaw := player.yaw if player.is_local() else body.global_rotation.y
 		shoulders = Transform3D(Basis(Vector3.UP, yaw), body.global_position)

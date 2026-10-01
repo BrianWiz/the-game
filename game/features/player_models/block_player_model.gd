@@ -86,6 +86,9 @@ func _process(delta: float) -> void:
 		set_head_type(models.type_for_head(peer_id))
 		set_tail_type(models.type_for_tail(peer_id))
 		set_appearance(models.appearance_for(peer_id))
+		PlayerHeight.apply_avatar(
+			self, models.height_scale_for(peer_id), player.movement.hull_height_m()
+		)
 	var holding := hand != null and ItemCatalog.find(hand.net_item_id) != null
 	var support := holding and hand.support_grip() != null
 	var gun := GunRig.for_peer(get_tree(), player.get_multiplayer_authority())
@@ -185,7 +188,7 @@ func sleeve_color() -> Color:
 ## their shortened third-person avatar, without either feature needing to know the
 ## other's body-type constants.
 func height_scale() -> float:
-	return _height_scale
+	return float(get_meta(&"standing_height_scale", _height_scale * scale.x))
 
 
 func _remote_grounded() -> bool:
