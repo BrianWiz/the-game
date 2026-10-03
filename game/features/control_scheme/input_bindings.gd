@@ -29,6 +29,7 @@ const SECTIONS: Array[Dictionary] = [
 		"actions":
 		[
 			[&"primary_action", "Use held item / punch (hold to power punch)"],
+			[&"kick", "Kick (hold to power kick)"],
 			[&"use", "Interact"],
 			[&"drop_item", "Drop item"],
 			[&"inventory", "Inventory"],
@@ -48,6 +49,7 @@ const SECTIONS: Array[Dictionary] = [
 		"actions":
 		[
 			[&"toggle_third_person", "Third-person camera"],
+			[&"orbit_third_person", "Orbit third-person camera (hold)"],
 			[&"toggle_flashlight", "Flashlight"],
 			[&"toggle_noclip", "Noclip (requires sv_cheats)"],
 			[&"toggle_console", "Developer console"],

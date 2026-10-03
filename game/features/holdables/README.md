@@ -49,6 +49,32 @@ their ordinary size.
 No other code changes are needed — pickup, holding, replication and the primary
 action all key off the category.
 
+## Valuable tiers
+
+Phase 1 uses five valuables. IDs, prices and models remain compatible with saved
+inventories; ItemDefinition.rarity is static catalog metadata, not player state.
+
+| Item | Rarity | Icon / prompt color | Pawn price |
+| --- | --- | --- | --- |
+| Scrap Metal | Common | gray | $1 |
+| Wallet (stolen_wallet) | Uncommon | green | $3 |
+| Electronics | Rare | blue | $7 |
+| Watch | Epic | purple | $10 |
+| Jewelry | Legendary | gold | $15 |
+
+The existing garage and alley tables already weight each higher tier less often.
+Floor-dependent difficulty/drop rates remain Phase 1 B4 work. Cash Bundle is
+separate monetary loot, not a sixth valuable tier: it still redeems for $5 at the
+pawn counter, preserving saved cash and the existing server-idempotent sale path.
+There is no auto-credit on pickup or new wallet. All carried sellable loot,
+including cash, still drops on slum death.
+
+World and dropped-item prompts show rarity and pawn value on a second line using
+ItemCatalog.pickup_text(); item_color() supplies the matching UI color.
+Inventory/stash icons add a small colored border without tinting model artwork.
+Rarity names accompany colors for accessibility; selected inventory items and
+stash entries show their sale values. Ordinary items keep their old prompts.
+
 ## How it works
 
 - `item_pickup.gd`: a world pickup. It's an `interactables` entry (see
@@ -68,7 +94,8 @@ action all key off the category.
   Holding (`net_item_id`) is server-authoritative, like the rest of shared state — the one exception in this codebase is player movement.
 - The primary action (left click / right shoulder button) asks the server to resolve
   it based on the held item's category:
-  - `WEAPON`: hitscans from the replicated player eye position (independent of
+  - `WEAPON`: requires matching purchased ammunition in the backpack (see
+    [classic ammo](../gun_machine/README.md#classic-ammunition)), then hitscans from the replicated player eye position (independent of
     camera mode or the visual item pose), once per `pellet_count` (a shotgun fires
     several at slightly randomized angles — `spread_degrees`), and deals `damage` to
     whichever `Player` a pellet hits by calling `apply_damage` on
@@ -98,7 +125,18 @@ consumption, drops, grip positioning and replication use the ordinary food path.
 The `poke_bowl` FOOD item is sold by `features/food_court/poke_stand.gd` and uses
 that same collection, consumption and drop path, with a two-hand bowl view.
 
+The `wendys_burger` FOOD item is supplied by the food court's Wendy's counter.
+It uses ordinary collection, backpack, drops, inventory icons and one-hand food
+consumption, restoring full health through Combat.heal like the kebab.
+
 ## Cigarettes and bottled beer
+
+The purchased items reuse the casino bundle's textured amber beer bottle and
+cigarette meshes and materials. Held views have no static prop collider. The
+bottle is centered at its grip; the cigarette's +X filter end is rotated to +Z
+to preserve the hand convention. Mouth markers follow the bottle lip and filter,
+and smoke originates at the cigarette's opposite tip. Dropped items share these
+views through the existing catalog.
 
 Buy these at the salon bartender's **Bar shop** using E / B / Circle / touch USE.
 A cigarette costs $2 and a bottled beer costs $5. They collect into an empty hand

@@ -13,6 +13,9 @@ player controller. `district.tscn` is the reusable layout without a player or
 world environment. The live feature adds a streamed district and a two-way
 teleporter on the dev room east wall. No enemies or loot are added.
 
+The casino's **STREET CASINO** portal sits against the north wall at
+`(7, 1.1, -19.7)`, with its return landing at `(7, 1, -17.8)` on the GridMap floor.
+
 The fixed graph contains nine junctions, twelve street segments, four alleys and
 four interior rooms: 29 modules and 36 socket joins. Only the first junction is
 positioned directly. Subsequent modules attach through the garage's alignment API;
@@ -68,7 +71,7 @@ road. Regression coverage checks lamp and seating directions as well as clearanc
 
 ## In-game access
 
-Enter **DEV ROOM** in the casino south lobby, then use **STREET DISTRICT**
+Enter **DEV ROOM** in the casino north promenade, then use **STREET DISTRICT**
 on the east wall (E / controller Use / touch Use). The district loads before
 travel. Use **RETURN TO DEV ROOM** beside the street arrival to come back.
 Press P and search **Street District** for GPS directions to the door.
@@ -76,7 +79,7 @@ The static district streams locally; both authenticated portal endpoints and
 arrival markers remain present on every peer for multiplayer and late joins.
 
 The east block includes a gold-trimmed **GOLDEN CROWN CASINO** marquee and canopy.
-Its entrance teleports to the main casino south lobby. Use **STREET CASINO**
+Its entrance teleports to the main casino north promenade. Use **STREET CASINO**
 beside the DEV ROOM booth to return directly to this facade.
 Six searchable dumpsters sit beside alley mouths and service streets, and six
 cars park along the curbs. These reuse the existing loot tables, animated dumpster
@@ -95,3 +98,7 @@ layout checks cannot verify browser placement. After importing the project, run
 `GODOT_RELEASE=/path/to/linux_release.x86_64 bash tests/features/street_district/release_test.sh`
 from `game/`. This regression runs with assertions disabled and checks all joins,
 nine separate junction positions, and floor collision across the district.
+
+## Developer access
+
+Since issue #438 this entrance is a development door: it stays hidden and locked until `sv_cheats 1` (see [dev access](../dev_access/README.md)).

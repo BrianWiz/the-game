@@ -7,7 +7,7 @@ selected streamed interior and frees the previous one. Door interactions may
 preload the destination briefly so the arrival floor is ready.
 
 For distance culling, the client sets Godot's camera far plane to the farthest corner
-of the assigned room. The casino's bounds come from its world geometry; other
+of the assigned room. The casino's bounds come from its visible meshes and transformed GridMap cells; other
 rooms use their authored extents. This keeps always-loaded geometry in distant
 districts out of the draw list without fixed distance cutoffs. Shared gameplay
 nodes remain present on every peer, and the server never loads client-only
@@ -68,3 +68,6 @@ nameplates, replicated positions and camera masks. With a display available,
 drawn. Set `STREET_CAPTURE_DIR` to retain the in-game screenshots. Detached visuals
 are removed from the cache before their deferred deletion, so unloading a street
 cannot query transforms on nodes that have already left the scene tree.
+
+Moving visuals have a separate refresh cache. Static and moving visuals unregister
+on tree exit, restore their authored masks and can register again on reentry.

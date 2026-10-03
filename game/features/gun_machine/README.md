@@ -1,14 +1,83 @@
 # Gun machine
 
 A machine that sells a randomly generated gun for $20, and a trash can next to it
-that gets rid of your current one. Both stand in Rusty Hogg's pawn shop
-(`features/pawn_shop`), west off the south corridor. Its holding, firing and projectile system is
+that gets rid of your current one. Both stand along the east wall of the existing
+**Dev Room**, reached through the DEV ROOM booth on the casino north promenade.
+Use E, controller B/Circle or touch USE as before. Its holding, firing and projectile system is
 independent of `features/holdables` (which has its own fixed pistol/SMG/shotgun/AWP):
 a generated gun's stats vary per instance, so it can't reuse `holdables`' static
 `ItemDefinition` catalog. The two are still mutually exclusive, though — equipping a
 gun from either system holsters whatever the other was holding, so only one weapon is
 ever in hand. See `gun_rig.gd`'s `holster`/`net_equipped` and
 `features/inventory/player_inventory.gd`'s `holster_weapon`.
+
+## Chat buy menu
+
+Type **!guns** (or **/guns**) in in-game chat, or open **Esc → Activities → Buy guns**.
+The CS 1.6-inspired olive-and-gold menu uses numbered categories: **1–9** select,
+**0** exits, and **Esc** returns to categories then closes. Click/tap also works;
+controller focus navigation and A select rows. The Activities link lets touch players
+open it without a chat keyboard. Scrollable rows scale to phone-sized screens.
+These shortcuts are modal only and do not replace weapon-hotbar bindings.
+
+Buy anywhere: classic pistol $1,500, SMG/shotgun $5,550 and AWP $15,000 match the pawn
+shop prices. All four ship empty, including previously saved guns. Classic guns fill the hand if empty, otherwise a free backpack slot;
+use Inventory to equip stored guns. Generated families (buckshot, rifle, low-caliber,
+rocket, grenade, plasma) and Ray Gun cost the existing machine price of $20.
+Select barrels and automatic/semi-auto mode for generated families; other stats
+still roll within `GunGenerator` ranges. Rocket variants stop at two barrels because
+the magazine cannot hold more. Double-barrel plasma uses its existing authored model.
+The menu offers every **player** gun family/valid barrel-mode combination, not the
+NPC-only gunman prop or an infinite list of random stat rolls. Generated purchases
+replace the current rig; existing mutual holstering and firing rules are unchanged.
+
+`buy_catalog.gd` supplies trusted stock IDs, labels and prices. `buy_menu.gd` owns only
+local UI and a `NetworkedEntity` endpoint; it validates a single stock ID plus the real
+sender's player and calls `GunMachine.purchase(peer, choice = "")`. The optional choice
+extends the original server-only interface: omitted/empty still buys a random kiosk
+gun. All kiosk/menu payments share a per-peer pending lock; wallet checks still run
+through `PlayerMoney.charge`. No client can supply stats, a price or another peer.
+Loading inventories and active consumable use block buying. If capacity changes
+while paying, a paid classic gun drops at the purchase location, like pawn-shop sales.
+
+The menu and receipts are private transient events, never replayed to late joiners.
+Weapons/ammo replicate through existing Hand/inventory/GunRig spawners and Syncs.
+Respawns retain the existing carried weapons. Disconnect removes generated rigs
+(as before, including a purchase that finishes after leaving); a paid classic gun
+can drop locally if its buyer has left. Session switches invalidate pending delivery.
+Classic gun persistence follows Inventory; generated rigs remain session-only.
+Wallet persistence and weapon damage are unchanged. Moving the physical kiosk does
+not restrict this existing buy-anywhere menu.
+
+Tests: `tests/features/gun_machine/test_buy_menu.gd` and `test_buy_network.gd`
+cover catalog variants, chat dispatch, payment/capacity guards, holstering, modal
+cleanup, two real clients, private events, rejected forged payloads, late-join
+weapon snapshots and disconnect removal.
+
+## Classic ammunition
+
+Choose **9. Classic ammunition** in the same buy menu. Packs cost $10 for 20 pistol
+rounds, $20 for 40 SMG rounds, $20 for 8 shotgun shells, and $25 for 5 AWP rounds.
+Packs automatically enter a free backpack slot, even if your hand is empty. Equip
+the matching gun and fire normally (left click / controller right shoulder / touch
+FIRE): one round is drawn from the first matching backpack pack per accepted shot.
+A shotgun burst costs one shell, not one per pellet. There is no manual reload for
+classic guns; generated guns keep their existing ammunition and R reload.
+
+The existing ammo HUD shows available rounds and where to buy more. Empty guns
+stay equipped but produce no shots, recoil or firing sound. Wrong ammo, cooldown,
+loading and safe-zone rejections spend nothing. If you equip a pack, stow it again
+to feed your gun; primary action throws the pack like an ordinary prop.
+Packs reuse the existing small green bundle view, with weapon/round labels in
+inventory and pickup prompts. They have no pawn value.
+
+Partial IDs (`ammo:pistol:19`, for example) carry remaining rounds through the
+ordinary backpack, stow, drop, pickup and saved inventory paths, like partially used
+beer/cigarettes. Server-owned Hand firing spends them through
+`PlayerInventory.spend_ammo(weapon)`; `ammo_for(weapon)` is a read-only HUD count.
+Replication includes late joins, respawns retain ammo, and signed-in inventories
+persist it. Offline/dev inventories reset with the session. No extra ammo RPC,
+save schema, timer or balance is introduced.
 
 ## How it works
 
@@ -99,7 +168,8 @@ roll: `AmmoType.RAY`, semi-auto green bolts with a small splash, 20-round magazi
 ## Adding to the price or ranges
 
 `GunMachine.PRICE_CENTS` and `GunGenerator.AMMO_PROFILES`' ranges are the only
-numbers to tune for balance; nothing else needs to change.
+numbers to tune for generated-gun balance. Classic prices live in
+`GunBuyCatalog.FIXED_PRICES`, shared by the buy menu and pawn-shop wall tags.
 
 ## Performance
 
@@ -120,7 +190,9 @@ See [asset source and export instructions](../../assets/gun_machine/models/READM
 `HeldArms`, shared with catalog weapons. First person uses the camera-relative
 mount; third person and remote peers use the body-relative mount and aim pitch.
 Human avatars use their own skinned arms; creature bodies use the existing arm
-fallback. Skin and sleeve colors follow the player's appearance. Holstering or
-switching back to a procedural gun disables the generated weapon's hand pose.
+fallback. Skin and sleeve colors follow the player's appearance. Procedural rolls (including
+the Ray Gun) get `Grip` under the rear of the body and `SupportGrip` under the
+barrels from `GunView.build`, so every generated gun is hand-rigged. Holstering
+disables the hand pose.
 `Muzzle` remains the cosmetic shot origin, with separate left/right markers for
 future barrel-specific effects; authoritative projectile origins remain at the eye.
